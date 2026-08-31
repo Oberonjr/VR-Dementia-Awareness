@@ -12,14 +12,14 @@ Desktop.ini
 # Unity
 # =========================
 
-VR-Dementia/[Ll]ibrary/
-VR-Dementia/[Tt]emp/
-VR-Dementia/[Oo]bj/
-VR-Dementia/[Bb]uild/
-VR-Dementia/[Bb]uilds/
-VR-Dementia/[Ll]ogs/
-VR-Dementia/[Uu]ser[Ss]ettings/
-VR-Dementia/.utmp/
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+.utmp/
 *.log
 
 # Blender
@@ -27,8 +27,8 @@ VR-Dementia/.utmp/
 *.blend1.meta
 
 # Captures
-VR-Dementia/[Mm]emoryCaptures/
-VR-Dementia/[Rr]ecordings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
 
 # IDEs and Editors
 VR-Dementia/[Aa]ssets/Plugins/Editor/JetBrains*
@@ -77,17 +77,17 @@ InitTestScene*.unity*
 VR-Dementia/[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
 # Addressables
-VR-Dementia/ServerData
-VR-Dementia/[Aa]ssets/StreamingAssets/aa*
-VR-Dementia/[Aa]ssets/AddressableAssetsData/link.xml*
-VR-Dementia/[Aa]ssets/Addressables_Temp*
-VR-Dementia/[Aa]ssets/AddressableAssetsData/*/*.bin*
+ServerData
+[Aa]ssets/StreamingAssets/aa*
+[Aa]ssets/AddressableAssetsData/link.xml*
+[Aa]ssets/Addressables_Temp*
+[Aa]ssets/AddressableAssetsData/*/*.bin*
 
 # Visual Scripting
-VR-Dementia/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
-VR-Dementia/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
-VR-Dementia/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
-VR-Dementia/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers.meta
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers.meta
 
 # =========================
 # FMOD Studio & Unity Integration
@@ -102,5 +102,5 @@ Sound_System/Build/
 *.fsprouser
 
 # FMOD Cache in Unity Project
-VR-Dementia/[Aa]ssets/FMODStudioCache.asset
-VR-Dementia/[Aa]ssets/FMODStudioCache.asset.meta
+[Aa]ssets/FMODStudioCache.asset
+[Aa]ssets/FMODStudioCache.asset.meta
