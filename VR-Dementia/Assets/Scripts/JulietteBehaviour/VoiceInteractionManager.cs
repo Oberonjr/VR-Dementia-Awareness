@@ -26,6 +26,8 @@ public class VoiceInteractionManager : MonoBehaviour
     [Header("Groq Setup")]
     private GroqApi groq;
     private List<ChatMessage> messages = new List<ChatMessage>();
+    [SerializeField] private string modelName = "llama-3.3-70b-versatile";
+    [SerializeField] private const int MAXHISTORYMESSAGES = 12;
 
     [TextArea(5, 20)]
     [SerializeField] private string systemPrompt = "";
@@ -336,12 +338,18 @@ public class VoiceInteractionManager : MonoBehaviour
         }
 
         messages.Add(newMessage);
+        if (messages.Count > MAXHISTORYMESSAGES + 1)
+        {
+            int removeCount = messages.Count - (MAXHISTORYMESSAGES + 1);
+            messages.RemoveRange(1, removeCount);
+        }
 
         CreateChatCompletionRequest req = new CreateChatCompletionRequest
         {
-            Model = "llama-3.1-8b-instant",
+            Model = modelName,
             Messages = messages,
-            Temperature = 0.7f
+            Temperature = 0.7f,
+            MaxTokens = 300
         };
 
         CreateChatCompletionResponse res = await groq.CreateChatCompletion(req);
