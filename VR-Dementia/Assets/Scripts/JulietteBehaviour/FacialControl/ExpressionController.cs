@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
+using Oculus.Interaction;
 using UnityEngine;
 
 /// <summary>
@@ -64,6 +66,8 @@ public class ExpressionController : MonoBehaviour
 
         currentBreathingDuration = Random.Range(minBreathDuration, maxBreathDuration);
         targetBreathingWeight = Random.Range(minIntensity, maxIntensity);
+
+        EventBus<OnJulietteFinishedTalk>.OnEvent += EndMoodOnFinishTalking;
     }
 
     private void Update()
@@ -193,6 +197,11 @@ public class ExpressionController : MonoBehaviour
         {
             GameManager.Instance.SetMoodPercentage(mood, newInt);
         }
+    }
+
+    private void EndMoodOnFinishTalking(OnJulietteFinishedTalk e)
+    {
+        GameManager.Instance.TransitionMood(GameManager.Instance.volumeconfig, moodTransitionTime);
     }
 
     private void HandleBreathing()
