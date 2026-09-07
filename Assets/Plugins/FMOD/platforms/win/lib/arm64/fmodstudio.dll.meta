@@ -65,6 +65,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 161631
   packageName: FMOD for Unity (2.02)
-  packageVersion: 2.02.32
+  packageVersion: 2.02.34
   assetPath: Assets/Plugins/FMOD/platforms/win/lib/arm64/fmodstudio.dll
-  uploadId: 847630
+  uploadId: 931624
