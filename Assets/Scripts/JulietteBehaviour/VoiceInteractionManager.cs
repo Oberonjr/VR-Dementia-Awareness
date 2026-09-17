@@ -24,7 +24,7 @@ public class VoiceInteractionManager : MonoBehaviour
     private const int MAX_RECORDING_SECONDS = 60;
 
     [Header("Language")]
-    public CurrentLanguage currentLanguage = CurrentLanguage.English;
+    public CurrentLanguage currentLanguage;
     
     [Header("Groq Setup")]
     private GroqApi groq;
@@ -683,10 +683,10 @@ public class VoiceInteractionManager : MonoBehaviour
     //Ensure that a language change in the inspector during playmode actually notifies the systems
     private void OnValidate()
     {
-        if (!Application.isPlaying) { return; }
         if (currentLanguage != lastLanguage)
         {
             lastLanguage = currentLanguage;
+            //if (!Application.isPlaying) { return; }
             RebuildSystemPrompt();
         }
     }
