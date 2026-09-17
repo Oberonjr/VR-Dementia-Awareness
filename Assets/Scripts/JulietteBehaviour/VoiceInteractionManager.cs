@@ -23,18 +23,43 @@ public class VoiceInteractionManager : MonoBehaviour
 {
     private const int MAX_RECORDING_SECONDS = 60;
 
+    [Header("Language")]
+    public CurrentLanguage currentLanguage = CurrentLanguage.English;
+    
     [Header("Groq Setup")]
     private GroqApi groq;
     private List<ChatMessage> messages = new List<ChatMessage>();
     [SerializeField] private string modelName = "llama-3.3-70b-versatile";
     [SerializeField] private const int MAXHISTORYMESSAGES = 12;
 
+    [Header("SCENARIO")] [TextArea(5, 20)] 
+    [SerializeField] private string scenarioDescription = "";
+    
+    [Header("CHARACTER")]
+    [TextArea(5, 20)]
+    [SerializeField] private string characterDescription = "Name: \n Age: \n Description:";
+   
+    [Header("SYSTEM RULES")]
+    [TextArea(5, 20)]
+    [SerializeField] private string systemRules = "Output format: \n Response Constraints: \n Guardrails:";
+    
+    [Header("LANGUAGE")]
+    [TextArea(5, 20)]
+    private string languageSelection = "Format all responses in: ";
+    
+    
     [TextArea(5, 20)]
     [SerializeField] private string systemPrompt = "";
 
     // Stores the current language code for Whisper STT
-    private string sttLanguage = "en";
-
+    private string sttLanguage => currentLanguage switch
+    {
+        CurrentLanguage.English => "en",
+        CurrentLanguage.Dutch => "nl",
+        _ => "en"
+    };
+    private CurrentLanguage lastLanguage;
+    
     [Header("Setup")]
     [SerializeField] private InworldTTSClient inworldTTS;
     [SerializeField] private LipSyncController lipSyncController;
@@ -79,6 +104,10 @@ public class VoiceInteractionManager : MonoBehaviour
 
     private IEnumerator Start()
     {
+        lastLanguage = currentLanguage;
+        //Concatenate the four sections into one prompt for the LLM
+        RebuildSystemPrompt();
+        
         // Load the credentials dynamically based on the current platform
         LoadGroqCredentials();
 
@@ -110,6 +139,7 @@ public class VoiceInteractionManager : MonoBehaviour
         {
             InitFMODMicrophone();
         }
+
     }
 
     private void Update()
@@ -212,18 +242,17 @@ public class VoiceInteractionManager : MonoBehaviour
         // We use StartsWith to catch all variations of english language
         if (newLocale.Identifier.Code.StartsWith("en"))
         {
-            sttLanguage = "en";
-            // Specifically replace the response rule to keep her a "Dutch woman" in the prompt
-            systemPrompt = systemPrompt.Replace("All responses must be in Dutch.", "All responses must be in English.");
+            currentLanguage = CurrentLanguage.English;
             Debug.Log($"Language switched to English (Code: {newLocale.Identifier.Code}).");
         }
         else if (newLocale.Identifier.Code.StartsWith("nl"))
         {
-            sttLanguage = "nl";
-            systemPrompt = systemPrompt.Replace("All responses must be in English.", "All responses must be in Dutch.");
+            currentLanguage = CurrentLanguage.Dutch;
             Debug.Log($"Language switched to Dutch (Code: {newLocale.Identifier.Code}).");
         }
-
+        RebuildSystemPrompt();
+        lastLanguage = currentLanguage;
+        
         // Apply the newly translated system prompt to the active history immediately if it exists
         if (messages.Count > 0 && messages[0].Role == "system")
         {
@@ -643,5 +672,22 @@ public class VoiceInteractionManager : MonoBehaviour
         while (GameManager.Instance.VoiceInterManager.IsSpeaking) { yield return null; }
 
         EventBus<OnJulietteFinishedTalk>.Publish(new OnJulietteFinishedTalk());
+    }
+
+    private void RebuildSystemPrompt()
+    {
+        languageSelection = $"Format all responses in: {currentLanguage}";
+        systemPrompt = $"# Scenario\n{scenarioDescription}\n\n# Character\n{characterDescription}\n\n# Rules\n{systemRules}\n\n# Language \n{languageSelection}\n";
+    }
+
+    //Ensure that a language change in the inspector during playmode actually notifies the systems
+    private void OnValidate()
+    {
+        if (!Application.isPlaying) { return; }
+        if (currentLanguage != lastLanguage)
+        {
+            lastLanguage = currentLanguage;
+            RebuildSystemPrompt();
+        }
     }
 }

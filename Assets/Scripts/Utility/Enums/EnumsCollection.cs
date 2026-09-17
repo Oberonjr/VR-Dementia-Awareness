@@ -9,5 +9,6 @@ public enum TutorialType { Turning, Moving, MenuOpen, Grab, None }
 public enum IndicatorHUDs { PressSend, EnterHome, SugarPickup }
 public enum JulietteAnimations { OpenDoor, Walk, Sit, IdleStand }
 
+public enum CurrentLanguage{English, Dutch}
 // Was replaced by locomotion events, but perhaps might be useful still
 public enum JoystickDirection { Any, Up, Horizontal }
