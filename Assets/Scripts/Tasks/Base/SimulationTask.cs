@@ -10,6 +10,7 @@ public class SimulationTask : MonoBehaviour
 
     public virtual void StartTask()
     {
+        Debug.Log("Starting Task: " + this);
         if (isActive) { return; }
         isActive = true;
     }
@@ -17,6 +18,7 @@ public class SimulationTask : MonoBehaviour
     public virtual void FinishTask()
     {
         if (isFinished) { return; }
+        Debug.Log("Ending Task: " + this);
 
         onTaskFinished?.Invoke();
         isFinished = true;
