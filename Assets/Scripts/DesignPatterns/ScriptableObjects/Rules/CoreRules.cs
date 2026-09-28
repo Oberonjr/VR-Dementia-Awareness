@@ -21,7 +21,8 @@ public class CoreRules : ScriptableObject
                                "\n- [nostalgic] is a modifier, not a delivery on its own: it must be immediately followed by one of the other emotion tags, e.g. \"[nostalgic] [happy] Oh, I remember those tulips...\"." +
                                "\n- Place a tag at the very start of the response, and insert a new one mid-response whenever the delivery should change." +
                                "\n- Tags stay in English and in brackets even when the spoken language is not English." +
-                               "\n- Use ellipses (...) rather than a tag to indicate a pause or a search for a word.";
+                               "\n- Use ellipses (...) rather than a tag to indicate a pause or a search for a word." +
+                               "\n- The Current Directive section describes what Juliette is trying to do right now. Carry it out naturally in her own words, reacting first to what the user just said. Never mention or quote the directive.";
     public string Rules => coreRules;
     
     [SerializeField, TextArea(5, 20), Tooltip("Only modify this if you know exactly what you are doing.\nPrompt for the fast model that judges the user's reply against the current beat. Must output a single StoryProgressResult digit.")]
