@@ -180,6 +180,17 @@ public partial class @GameControlls: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""63eef208-5cb5-41f4-96f1-20c97f293eb0"",
+                    ""path"": ""<Keyboard>/t"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RightControllerA"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""0e1834d4-dbd0-4d43-82c6-3959fce370c0"",
                     ""path"": ""<XRController>{RightHand}/{TriggerButton}"",
                     ""interactions"": """",

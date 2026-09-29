@@ -6,9 +6,9 @@ public class CharacterHandler : MonoBehaviour
     [SerializeField] private GameObject VRCharacter;
     [SerializeField] private GameObject FPSCharacter;
 
-    private bool isVRActive = false;
+    public static bool isVRActive { private set; get; } = false;
 
-    private void Start()
+    private void Awake()
     {
         isVRActive = XRSettings.isDeviceActive;
         UpdateCharacter();

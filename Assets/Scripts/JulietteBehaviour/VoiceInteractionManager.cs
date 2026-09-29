@@ -10,6 +10,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Groq;
 
@@ -23,18 +24,46 @@ public class VoiceInteractionManager : MonoBehaviour
 {
     private const int MAX_RECORDING_SECONDS = 60;
 
+    [Header("Language")]
+    public CurrentLanguage currentLanguage;
+    
     [Header("Groq Setup")]
     private GroqApi groq;
     private List<ChatMessage> messages = new List<ChatMessage>();
     [SerializeField] private string modelName = "llama-3.3-70b-versatile";
+    [SerializeField] private string classifierModelName = "llama-3.1-8b-instant"; //Model used to quickly classify if the given beat is a Success or Failure
+    [SerializeField] private string STTModelName = "whisper-large-v3";
     [SerializeField] private const int MAXHISTORYMESSAGES = 12;
 
+    [Header("SCENARIO")] [TextArea(5, 20)] 
+    [SerializeField] private string scenarioDescription = "";
+    
+    [Header("CHARACTER")]
     [TextArea(5, 20)]
-    [SerializeField] private string systemPrompt = "";
+    [SerializeField] private string characterDescription = "Name: \n Age: \n Description:";
+   
+    [Header("SYSTEM RULES")]
+    [TextArea(5, 20)]
+    [SerializeField] private string systemRules = "Output format: \n Response Constraints: \n Guardrails: ";
+    [SerializeField] private CoreRules coreRules = null;
+    
+    [Header("LANGUAGE")]
+    [TextArea(5, 20)]
+    private string languageSelection = "Format all responses in: ";
+
+    private string currentDirective;
+    
+    private string systemPrompt = "";
 
     // Stores the current language code for Whisper STT
-    private string sttLanguage = "en";
-
+    private string sttLanguage => currentLanguage switch
+    {
+        CurrentLanguage.English => "en",
+        CurrentLanguage.Dutch => "nl",
+        _ => "en"
+    };
+    private CurrentLanguage lastLanguage;
+    
     [Header("Setup")]
     [SerializeField] private InworldTTSClient inworldTTS;
     [SerializeField] private LipSyncController lipSyncController;
@@ -76,9 +105,20 @@ public class VoiceInteractionManager : MonoBehaviour
         dialogueInstance.getTimelinePosition(out int posMs);
         return posMs / 1000f; // Convert ms to seconds
     }
-
+    
+    private StoryBeatManager storyBeatManager;
+    
     private IEnumerator Start()
     {
+        if (coreRules == null || coreRules.Rules == null || coreRules.Rules == string.Empty || string.IsNullOrEmpty(coreRules.OutcomeClassifierPrompt))
+        {
+            throw new SystemException("Core rules not assigned or the rules were empty. Please assign a valid core rules.");
+        }
+        lastLanguage = currentLanguage;
+        storyBeatManager = StoryBeatManager.Instance;
+        //Concatenate the multiple sections into one prompt for the LLM
+        RebuildSystemPrompt();
+        
         // Load the credentials dynamically based on the current platform
         LoadGroqCredentials();
 
@@ -190,7 +230,11 @@ public class VoiceInteractionManager : MonoBehaviour
         Debug.Log($"[MEASURE] STT: {stopwatch.ElapsedMilliseconds} ms | User said: {userText}");
 
         stopwatch.Restart();
+        await ResolveStoryBeat(userText);
+        stopwatch.Stop();
+        Debug.Log($"[MEASURE] Beat resolve: {stopwatch.ElapsedMilliseconds} ms");
         // Generate AI Text Response (Groq Llama)
+        stopwatch.Restart();
         string aiResponseText = await GetAIResponse(userText);
         stopwatch.Stop();
         Debug.Log($"[MEASURE] LLM: {stopwatch.ElapsedMilliseconds} ms | AI Response: {aiResponseText}");
@@ -212,18 +256,17 @@ public class VoiceInteractionManager : MonoBehaviour
         // We use StartsWith to catch all variations of english language
         if (newLocale.Identifier.Code.StartsWith("en"))
         {
-            sttLanguage = "en";
-            // Specifically replace the response rule to keep her a "Dutch woman" in the prompt
-            systemPrompt = systemPrompt.Replace("All responses must be in Dutch.", "All responses must be in English.");
+            currentLanguage = CurrentLanguage.English;
             Debug.Log($"Language switched to English (Code: {newLocale.Identifier.Code}).");
         }
         else if (newLocale.Identifier.Code.StartsWith("nl"))
         {
-            sttLanguage = "nl";
-            systemPrompt = systemPrompt.Replace("All responses must be in English.", "All responses must be in Dutch.");
+            currentLanguage = CurrentLanguage.Dutch;
             Debug.Log($"Language switched to Dutch (Code: {newLocale.Identifier.Code}).");
         }
-
+        RebuildSystemPrompt();
+        lastLanguage = currentLanguage;
+        
         // Apply the newly translated system prompt to the active history immediately if it exists
         if (messages.Count > 0 && messages[0].Role == "system")
         {
@@ -302,10 +345,12 @@ public class VoiceInteractionManager : MonoBehaviour
             return SaveWav.SaveFromPCM16(pcmData, nativeRate, nativeChannels);
         });
 
+        //string lastNpcLine = GetLastNpcLine(stripTags: true);
         CreateAudioTranscriptionsRequest req = new CreateAudioTranscriptionsRequest
         {
             FileData = new FileData() { Data = wavData, Name = "audio.wav" },
-            Model = "whisper-large-v3",
+            //Prompt = string.IsNullOrEmpty(lastNpcLine) ? null : lastNpcLine,
+            Model = STTModelName,
             Language = sttLanguage
         };
 
@@ -349,7 +394,7 @@ public class VoiceInteractionManager : MonoBehaviour
             Model = modelName,
             Messages = messages,
             Temperature = 0.7f,
-            MaxTokens = 300
+            MaxTokens = 1024
         };
 
         CreateChatCompletionResponse res = await groq.CreateChatCompletion(req);
@@ -357,8 +402,14 @@ public class VoiceInteractionManager : MonoBehaviour
         if (res.Choices != null && res.Choices.Count > 0)
         {
             var responseMessage = res.Choices[0].Message;
-            responseMessage.Content = responseMessage.Content.Trim();
-
+            string content = responseMessage.Content.Trim();
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                Debug.LogWarning($"[LLM] Empty reply (finish: {res.Choices[0].FinishReason}).");                                                                                                                  
+                return string.Empty; 
+            }
+            responseMessage.Content = content;
+            if(storyBeatManager != null) storyBeatManager.RegisterNpcTurn();
             // Append the AI response to the history to maintain context
             messages.Add(responseMessage);
 
@@ -455,7 +506,11 @@ public class VoiceInteractionManager : MonoBehaviour
 
         // Wait until all parallel tasks have returned their audio bytes
         byte[][] audioDataArray = await Task.WhenAll(fetchTasks);
-
+        if (audioDataArray.All(a => a == null || a.Length == 0))
+        {
+            Debug.LogWarning($"[TTS] No audio produced for response: '{aiResponseText}'. Skipping playback.");
+            return;
+        }
         string tempPath = Path.Combine(Application.temporaryCachePath, "stitched_voice.wav");
 
         // Stitch audio bytes together
@@ -644,4 +699,102 @@ public class VoiceInteractionManager : MonoBehaviour
 
         EventBus<OnJulietteFinishedTalk>.Publish(new OnJulietteFinishedTalk());
     }
+
+    private void RebuildSystemPrompt()
+    {
+        languageSelection = $"Format all responses in: {currentLanguage}";
+        if(storyBeatManager != null)
+        {
+            currentDirective = storyBeatManager.GetDirective();
+        }
+        else
+        {
+            currentDirective = string.Empty;
+        }
+
+        // Guarded so an unassigned/empty CoreRules asset can't NRE from OnValidate() while editing in the Inspector
+        // (Start() already hard-fails on this at Play time; this is just the Edit-mode safety net).
+        string currentRules = systemRules;
+        if (coreRules != null && !string.IsNullOrEmpty(coreRules.Rules))
+        {
+            currentRules += " \n\n " + coreRules.Rules;
+        }
+        else
+        {
+            Debug.LogWarning("Core rules are missing or empty — system prompt is being built without them.");
+        }
+
+        systemPrompt = $"# Scenario\n{scenarioDescription}\n\n# Character\n{characterDescription}\n\n# Rules\n{currentRules}\n\n# Language \n{languageSelection}\n\n# Current Directive \n{currentDirective}\n";
+    }
+
+    //Ensure that a language change in the inspector during playmode actually notifies the systems
+    private void OnValidate()
+    {
+        if (currentLanguage != lastLanguage)
+        {
+            lastLanguage = currentLanguage;
+            //if (!Application.isPlaying) { return; }
+            RebuildSystemPrompt();
+        }
+    }
+
+    private async Task ResolveStoryBeat(string userText)
+    {
+        if (storyBeatManager == null) return;
+        StoryBeat previousBeat = storyBeatManager.CurrentStoryBeat;
+        if (!storyBeatManager.AdvanceOnTimeout() && storyBeatManager.NeedsClassification)
+        {
+            storyBeatManager.ReportOutcome(await ClassifyUserReply(userText));
+        }
+        if (storyBeatManager.CurrentStoryBeat != previousBeat) RebuildSystemPrompt();
+    }
+
+    private async Task<StoryProgressResult> ClassifyUserReply(string userText)
+    {
+        StoryBeat beat = storyBeatManager.CurrentStoryBeat;
+        string success = string.IsNullOrEmpty(beat.SuccessCondition) ? "(none)" : beat.SuccessCondition;
+        string failure = string.IsNullOrEmpty(beat.FailureCondition) ? "(none)" : beat.FailureCondition;
+
+        CreateChatCompletionRequest req = new CreateChatCompletionRequest
+        {
+            Model = classifierModelName,
+            Messages = new List<ChatMessage>
+            {
+                new ChatMessage { Role = "system", Content = coreRules.OutcomeClassifierPrompt },
+                new ChatMessage
+                {
+                    Role = "user",
+                    Content =
+                        $"Success condition: {success}\nFailure condition: {failure}\n\nNPC's last line: {GetLastNpcLine(stripTags: true)}\nUser's reply: {userText}"
+                }
+
+            },
+            Temperature = 0f,
+            MaxTokens = 1024
+        };
+        CreateChatCompletionResponse res = await groq.CreateChatCompletion(req);
+        string raw = (res.Choices != null && res.Choices.Count > 0) ? res.Choices[0].Message.Content?.Trim() : null;
+        Match digit = string.IsNullOrEmpty(raw) ? Match.Empty : Regex.Match(raw, "[0-2]");
+        if (digit.Success && Enum.IsDefined(typeof(StoryProgressResult), int.Parse(digit.Value)))
+        {
+            StoryProgressResult outcome = (StoryProgressResult)int.Parse(digit.Value);
+            Debug.Log($"[StoryBeat]'{beat.BeatId}' judged {outcome} (raw '{raw}') | user : {userText}");
+            return outcome;
+        }
+        
+        Debug.LogWarning($"[StoryBeat] Classifier returned '{raw}' on '{beat.BeatId}', defaulting to Continue, finish: {res.Choices?[0].FinishReason}");
+        return StoryProgressResult.Continue;
+    }
+
+    private string GetLastNpcLine(bool stripTags)
+    {
+        for (int i = messages.Count - 1; i >= 0; i--)
+        {
+            if (messages[i].Role != "assistant") continue;
+            return stripTags ? Regex.Replace(messages[i].Content, @"\[[^\]]*\]", "").Trim() : messages[i].Content;
+        }
+
+        return string.Empty;
+    }
+     
 }

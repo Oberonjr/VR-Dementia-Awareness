@@ -1,0 +1,230 @@
+fileFormatVersion: 2
+guid: e784bd4aab294d5478be5663364f7c3c
+ModelImporter:
+  serializedVersion: 24200
+  internalIDToNameTable: []
+  externalObjects:
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: asphalt_Normal
+    second: {fileID: 2800000, guid: 7096ce1f219b53a49aebd5ed95c8e0fd, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: asphalt_albedo
+    second: {fileID: 2800000, guid: 085510f1de12cc04786e46b6ea4295f0, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_courtyard_3d_model_basecolor
+    second: {fileID: 2800000, guid: 3f5b333503c80db4cbb017b1469e24c0, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_courtyard_3d_model_metallic
+    second: {fileID: 2800000, guid: 84f84af1928909a4a9fad6d122eb466e, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_courtyard_3d_model_normal
+    second: {fileID: 2800000, guid: 7ac5d016d071e9d4cb956568e13cca49, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_courtyard_3d_model_roughness
+    second: {fileID: 2800000, guid: 7a6f5097a67da6c4f8121f51119be697, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_landscape_3d_model_basecolor
+    second: {fileID: 2800000, guid: dbcd0a26ef18a1e4aa07ef3e725e5512, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_landscape_3d_model_metallic
+    second: {fileID: 2800000, guid: c538a42045111284296e0e1bb4cc9c8d, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_landscape_3d_model_normal
+    second: {fileID: 2800000, guid: f637134787ee4cf4d80b5199dc178a05, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: garden_landscape_3d_model_roughness
+    second: {fileID: 2800000, guid: 9d4f1e0d8c0dfdd4a971e69b22b54463, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: mini_cooper_car_3d_model_basecolor
+    second: {fileID: 2800000, guid: dcf9d406c8fd4014a8b565377e3b1146, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: mini_cooper_car_3d_model_metallic
+    second: {fileID: 2800000, guid: 147781f7fdbbb3649af6832712db8c96, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: mini_cooper_car_3d_model_normal
+    second: {fileID: 2800000, guid: 6578b2972f4e1114aabd68b70d6915bd, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: mini_cooper_car_3d_model_roughness
+    second: {fileID: 2800000, guid: 4fbe8d0b4b39e7c46bcd5a4700573e02, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: pavement1_albedo
+    second: {fileID: 2800000, guid: 54a32ca994f3ae3448e326100c657975, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: pavement1_normal
+    second: {fileID: 2800000, guid: 7257a50dc04bbdb43a74d33757169299, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: pavement1_roughness
+    second: {fileID: 2800000, guid: b7a47e93454a4244da3bb4c413b6adef, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: pavementRed_Albedo
+    second: {fileID: 2800000, guid: 2679ae6cbb0e0ec4d8f4b628be23450d, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: pavementRed_Normal
+    second: {fileID: 2800000, guid: c7afe756ff8b2fc498a957a0f69daa0f, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: pavementRed_roughness
+    second: {fileID: 2800000, guid: 77e79f82423be8541b87674372ab7300, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: residential_house_3d_model_basecolor
+    second: {fileID: 2800000, guid: cf23f11d30878374e80c474f30fe6373, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: residential_house_3d_model_metallic
+    second: {fileID: 2800000, guid: 00ab662ef9440a94f8a5c9446f76cb2e, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: residential_house_3d_model_normal
+    second: {fileID: 2800000, guid: 54912bc6587180545993f412a1e05ce5, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: residential_house_3d_model_roughness
+    second: {fileID: 2800000, guid: 509d72ff423d2594286f65abc7948874, type: 3}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
+    motionNodeName: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    importConstraints: 0
+    animationCompression: 1
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    extraUserProperties: []
+    clipAnimations: []
+    isReadable: 0
+  meshes:
+    lODScreenPercentages: []
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 1
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
+    nodeNameCollisionStrategy: 1
+    fileIdsGeneration: 2
+    swapUVChannels: 0
+    generateSecondaryUV: 0
+    useFileUnits: 1
+    keepQuads: 0
+    weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    generateMeshLods: 0
+    meshLodGenerationFlags: 0
+    maximumMeshLod: -1
+    meshOptimizationFlags: -1
+    indexFormat: 0
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 1
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+    strictVertexDataChecks: 0
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+    normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
+  importAnimation: 1
+  humanDescription:
+    serializedVersion: 3
+    human: []
+    skeleton: []
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    globalScale: 1
+    rootMotionBoneName: 
+    hasTranslationDoF: 0
+    hasExtraRoot: 0
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
+  animationType: 2
+  humanoidOversampling: 1
+  avatarSetup: 0
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 1
+  importBlendShapeDeformPercent: 1
+  remapMaterialsIfMaterialImportModeIsNone: 0
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

@@ -34,7 +34,7 @@ public class GameManager : MonoBehaviour
     {
         GetInstances();
         SetupInput();
-        ChangeLocalization("en-GB");
+        ChangeLocalization(voiceInterManager.currentLanguage == CurrentLanguage.English ? "en-GB"  : "nl-NL" );
     }
 
     private void OnDestroy() { if (Instance == this && gameInput != null) { gameInput.Disable(); } }
