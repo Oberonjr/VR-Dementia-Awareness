@@ -5,7 +5,7 @@ using UnityEngine.UI;
 public class PressPhone : SimulationTask
 {
     [Header("Phone Setup")]
-    [SerializeField] private Transform phone;
+    [SerializeField] private Transform[] phones;
 
     [Header("Hand Setup")]
     [SerializeField] private Transform[] leftHandComponents;
@@ -21,7 +21,8 @@ public class PressPhone : SimulationTask
     {
         yield return new WaitForSeconds(0.5f);
 
-        phone.gameObject.SetActive(false);
+        foreach (Transform phone in phones)
+            phone.gameObject.SetActive(false);
 
         timer = gameObject.AddComponent<Timer>();
         timer.OnTimerFinished += ShowReminder;
@@ -35,7 +36,8 @@ public class PressPhone : SimulationTask
     public override void StartTask()
     {
         base.StartTask();
-        phone.gameObject.SetActive(true);
+        foreach (Transform phone in phones)
+            phone.gameObject.SetActive(true);
 
         for (int i = 0; i < leftHandComponents.Length; i++)
         {
@@ -56,7 +58,8 @@ public class PressPhone : SimulationTask
 
         timer.StopTimer();
         EventBus<OnShowIndicator>.Publish(new OnShowIndicator(false));
-        phone.gameObject.SetActive(false);
+        foreach (Transform phone in phones)
+            phone.gameObject.SetActive(false);
 
         for (int i = 0; i < leftHandComponents.Length; i++)
         {

@@ -15,6 +15,8 @@ public class Timer : MonoBehaviour
     private bool active;
     private bool loop;
 
+    public bool Active {  get => active; }
+
     private void Update()
     {
         RunTimer();
@@ -48,6 +50,16 @@ public class Timer : MonoBehaviour
         this.waitTime = waitTime;
     }
 
+    public void SetCurrentPassedTime(float currentPassedTime)
+    {
+        if (currentPassedTime >= waitTime)
+            this.currentPassedTime = waitTime;
+        else if (currentPassedTime < 0)
+            this.currentPassedTime = 0;
+        else
+            this.currentPassedTime = currentPassedTime;
+    }
+    
     public void SetLoop(bool loop)
     {
         this.loop = loop;

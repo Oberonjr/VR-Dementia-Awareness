@@ -34,6 +34,15 @@ public class LocomotionTutorial : SimulationTask
         SetupCurrentLocomotion();
         EventBus<OnUpdateTask>.Publish(new OnUpdateTask());
         vrConfig.controllerDrivenHandPosesType = OVRManager.ControllerDrivenHandPosesType.ConformingToController;
+        
+        if (!CharacterHandler.isVRActive)
+        {
+            SetupCurrentLocomotion();
+            SetupCurrentLocomotion();
+            Timer timer = gameObject.AddComponent<Timer>();
+            timer.OnTimerFinished += PalmMenuVisibilityChanged;
+            timer.Setup(0.5f, false, true);
+        }
     }
 
     public override void FinishTask()
@@ -88,11 +97,16 @@ public class LocomotionTutorial : SimulationTask
     {
         if (evt.isVisible)
         {
-            EventBus<OnPalmMenuVisibilityChanged>.OnEvent -= PalmMenuVisibilityChanged;
-            TriggerSuccessFeedback();
-            EventBus<OnShowTutorial>.Publish(new OnShowTutorial(false));
-            FinishTask();
+            PalmMenuVisibilityChanged();
         }
+    }
+
+    private void PalmMenuVisibilityChanged()
+    {
+        EventBus<OnPalmMenuVisibilityChanged>.OnEvent -= PalmMenuVisibilityChanged;
+        TriggerSuccessFeedback();
+        EventBus<OnShowTutorial>.Publish(new OnShowTutorial(false));
+        FinishTask();
     }
 
     private void TriggerSuccessFeedback()
