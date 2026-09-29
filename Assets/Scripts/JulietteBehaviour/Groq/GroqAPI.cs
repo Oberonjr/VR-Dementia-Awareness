@@ -84,7 +84,7 @@ namespace Groq
 
                 var asyncOperation = request.SendWebRequest();
 
-                while (!asyncOperation.isDone) await Task.Yield();
+                while (!asyncOperation.isDone) await System.Threading.Tasks.Task.Yield();
 
                 data = JsonConvert.DeserializeObject<T>(request.downloadHandler.text, jsonSerializerSettings);
             }
@@ -150,7 +150,7 @@ namespace Groq
                     }
                     onResponse?.Invoke(dataList);
 
-                    await Task.Yield();
+                    await System.Threading.Tasks.Task.Yield();
                 }
                 while (!asyncOperation.isDone && !token.IsCancellationRequested);
 
@@ -179,7 +179,7 @@ namespace Groq
                 request.downloadHandler = new DownloadHandlerBuffer();
                 var asyncOperation = request.SendWebRequest();
 
-                while (!asyncOperation.isDone) await Task.Yield();
+                while (!asyncOperation.isDone) await System.Threading.Tasks.Task.Yield();
 
                 data = JsonConvert.DeserializeObject<T>(request.downloadHandler.text, jsonSerializerSettings);
             }
