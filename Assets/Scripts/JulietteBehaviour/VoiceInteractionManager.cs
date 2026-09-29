@@ -297,7 +297,7 @@ public class VoiceInteractionManager : MonoBehaviour
     private async Task<string> TranscribeAudio(byte[] pcmData)
     {
         // Offload the heavy byte array conversion to a background thread to prevent the main thread from freezing
-        byte[] wavData = await Task.Run(() =>
+        byte[] wavData = await System.Threading.Tasks.Task.Run(() =>
         {
             return SaveWav.SaveFromPCM16(pcmData, nativeRate, nativeChannels);
         });
@@ -368,7 +368,7 @@ public class VoiceInteractionManager : MonoBehaviour
         return "Error: No response generated.";
     }
 
-    private async Task PlayInworldTTS(string aiResponseText)
+    private async System.Threading.Tasks.Task PlayInworldTTS(string aiResponseText)
     {
         Debug.Log("Parsing emotions and sending parallel TTS requests...");
 
@@ -454,7 +454,7 @@ public class VoiceInteractionManager : MonoBehaviour
         }
 
         // Wait until all parallel tasks have returned their audio bytes
-        byte[][] audioDataArray = await Task.WhenAll(fetchTasks);
+        byte[][] audioDataArray = await System.Threading.Tasks.Task.WhenAll(fetchTasks);
 
         string tempPath = Path.Combine(Application.temporaryCachePath, "stitched_voice.wav");
 
@@ -462,7 +462,7 @@ public class VoiceInteractionManager : MonoBehaviour
         List<byte> stitchedPCM = new List<byte>();
 
         // Offload the heavy array stitching and file writing to a background thread
-        await Task.Run(() =>
+        await System.Threading.Tasks.Task.Run(() =>
         {
             // Artificial Pause length
             float pauseDurationSeconds = 0.2f;
