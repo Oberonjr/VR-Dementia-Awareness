@@ -60,44 +60,15 @@ public class LipSyncController : MonoBehaviour
     {
         if (isLiveMode && currentAudioInstance.isValid())
         {
-            currentAudioInstance.getPlaybackState(out FMOD.Studio.PLAYBACK_STATE state);
-
-            if (state == FMOD.Studio.PLAYBACK_STATE.STOPPING || state == FMOD.Studio.PLAYBACK_STATE.STOPPED)
-            {
-                isLiveMode = false;
-                ResetBlendshapes();
-                liveSampleBuffer.Clear();
-
-                while (liveAudioQueue.TryDequeue(out _)) { }
-                return;
-            }
-
+            if (CheckStopState()) return;
+            
             while (liveAudioQueue.TryDequeue(out float[] incomingData))
             {
                 liveSampleBuffer.AddRange(incomingData);
             }
 
-            int channels = isLiveStereo ? 2 : 1;
-            int requiredSamples = FRAME_SIZE * channels;
-
-            while (liveSampleBuffer.Count >= requiredSamples)
-            {
-                float[] chunk = new float[requiredSamples];
-                liveSampleBuffer.CopyTo(0, chunk, 0, requiredSamples);
-                liveSampleBuffer.RemoveRange(0, requiredSamples);
-
-                // Amplify silent core audio inputs to reach meaningful viseme boundaries
-                if (liveAudioGain != 1.0f)
-                {
-                    for (int i = 0; i < chunk.Length; i++)
-                    {
-                        chunk[i] = Mathf.Clamp(chunk[i] * liveAudioGain, -1.0f, 1.0f);
-                    }
-                }
-
-                OVRLipSync.ProcessFrame(lipSyncContext, chunk, liveFrame, isLiveStereo);
-            }
-
+            ProcessExtraBuffer();
+            
             UpdateBlendshapes(liveFrame);
             return;
         }
@@ -113,15 +84,64 @@ public class LipSyncController : MonoBehaviour
             return;
         }
 
+        UpdateBasedOnTimelinePosition();
+    }
+
+    /// <summary>
+    /// Checks if the playback state is either STOPPING or STOPPED.
+    /// Execute the necessary code if this is indeed the case.
+    /// </summary>
+    /// <returns>True if the playback state is indeed set to STOPPING or STOPPED</returns>
+    private bool CheckStopState()
+    {
+        currentAudioInstance.getPlaybackState(out FMOD.Studio.PLAYBACK_STATE state);
+        
+        if (state == FMOD.Studio.PLAYBACK_STATE.STOPPING || state == FMOD.Studio.PLAYBACK_STATE.STOPPED)
+        {
+            isLiveMode = false;
+            ResetBlendshapes();
+            liveSampleBuffer.Clear();
+
+            while (liveAudioQueue.TryDequeue(out _)) { }
+            return true;
+        }
+        
+        return false;
+    }
+
+    private void ProcessExtraBuffer()
+    {
+        int channels = isLiveStereo ? 2 : 1;
+        int requiredSamples = FRAME_SIZE * channels;
+
+        while (liveSampleBuffer.Count >= requiredSamples)
+        {
+            float[] chunk = new float[requiredSamples];
+            liveSampleBuffer.CopyTo(0, chunk, 0, requiredSamples);
+            liveSampleBuffer.RemoveRange(0, requiredSamples);
+
+            // Amplify silent core audio inputs to reach meaningful viseme boundaries
+            if (liveAudioGain != 1.0f)
+            {
+                for (int i = 0; i < chunk.Length; i++)
+                {
+                    chunk[i] = Mathf.Clamp(chunk[i] * liveAudioGain, -1.0f, 1.0f);
+                }
+            }
+
+            OVRLipSync.ProcessFrame(lipSyncContext, chunk, liveFrame, isLiveStereo);
+        }
+    }
+
+    private void UpdateBasedOnTimelinePosition()
+    {
         currentAudioInstance.getTimelinePosition(out int timelinePosMs);
 
         float timeInSeconds = timelinePosMs / 1000.0f;
         int currentFrameIndex = Mathf.FloorToInt((timeInSeconds * sampleRate) / FRAME_SIZE);
 
         if (currentFrameIndex >= 0 && currentFrameIndex < cachedFrames.Count)
-        {
             UpdateBlendshapes(cachedFrames[currentFrameIndex]);
-        }
     }
 
     private void OnDestroy()
