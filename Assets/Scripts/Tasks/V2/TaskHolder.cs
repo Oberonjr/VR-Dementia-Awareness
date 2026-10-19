@@ -54,7 +54,7 @@ public class TaskHolder : MonoBehaviour
         }
         if (taskList.Length <= index)
         {
-            Debug.Log("There are no tasks on this index or higher.");
+            Debug.LogWarning("There are no tasks on this index or higher.");
             return false;
         }
         if (taskList[index] == null)
@@ -85,7 +85,7 @@ public class TaskHolder : MonoBehaviour
             // Otherwise, prevent any potential Exception by returning the method.
             if (!StartTask()) return;
             
-            _currentTask.StartTask();
+            //_currentTask.StartTask();
             onTaskStart?.Invoke();
             _currentTask.onTaskEnd += StartNextTask;
         }

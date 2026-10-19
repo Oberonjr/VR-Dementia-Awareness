@@ -498,6 +498,7 @@ public class VoiceInteractionManager : MonoBehaviour
         }
 
         // Fire all requests simultaneously
+        Debug.Log($"[STEP] TTS: sending {chunkedRequests.Count} requests to Inworld");
         Task<byte[]>[] fetchTasks = new Task<byte[]>[chunkedRequests.Count];
         for (int i = 0; i < chunkedRequests.Count; i++)
         {
@@ -506,6 +507,7 @@ public class VoiceInteractionManager : MonoBehaviour
 
         // Wait until all parallel tasks have returned their audio bytes
         byte[][] audioDataArray = await System.Threading.Tasks.Task.WhenAll(fetchTasks); //CAUTION: CODE MANUALLY UPDATED FOR MERGE, CHECK THIS LINE IN CAUSE OF ISSUES
+        Debug.Log($"[STEP] TTS: received {audioDataArray.Length} audio chunks");
         if (audioDataArray.All(a => a == null || a.Length == 0))
         {
             Debug.LogWarning($"[TTS] No audio produced for response: '{aiResponseText}'. Skipping playback.");
@@ -569,6 +571,7 @@ public class VoiceInteractionManager : MonoBehaviour
 
             // Save to cache
             File.WriteAllBytes(tempPath, finalWavBytes);
+            Debug.Log($"[STEP] TTS audio stitched and saved to: {tempPath}");
         });
 
         // Set the active timeline for the ExpressionController to read
@@ -578,6 +581,7 @@ public class VoiceInteractionManager : MonoBehaviour
         PlayFMODProgrammerSound(tempPath);
 
         // Pass raw bytes and FMOD instance to the Lipsync Controller
+        Debug.Log("[STEP] FMOD playback started, starting lip sync");
         if (lipSyncController != null)
         {
             // Inworld defaults to 44100Hz
@@ -587,6 +591,7 @@ public class VoiceInteractionManager : MonoBehaviour
 
     private void PlayFMODProgrammerSound(string filePath)
     {
+        Debug.Log($"[STEP] Starting FMOD playback of: {filePath}");
         // Stop and clean up any currently playing dialogue instance
         if (dialogueInstance.isValid())
         {
@@ -612,6 +617,7 @@ public class VoiceInteractionManager : MonoBehaviour
     [AOT.MonoPInvokeCallback(typeof(FMOD.Studio.EVENT_CALLBACK))]
     private static FMOD.RESULT ProgrammerSoundCallback(FMOD.Studio.EVENT_CALLBACK_TYPE type, IntPtr instancePtr, IntPtr parameterPtr)
     {
+        Debug.Log($"[STEP] FMOD callback: {type}");
         FMOD.Studio.EventInstance instance = new FMOD.Studio.EventInstance(instancePtr);
 
         // Retrieve the pinned string pointer from the event instance
@@ -739,7 +745,7 @@ public class VoiceInteractionManager : MonoBehaviour
         }
     }
 
-    private async Task ResolveStoryBeat(string userText)
+    private async System.Threading.Tasks.Task ResolveStoryBeat(string userText)
     {
         if (storyBeatManager == null) return;
         StoryBeat previousBeat = storyBeatManager.CurrentStoryBeat;
