@@ -6,13 +6,14 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Groq;
+using VRD_AIProviders;
+using ChatMessage = VRD_AIProviders.ChatMessage;
 
 /// <summary>
 /// Manages all the AI processes, going from STT, to text response, to TTS.
@@ -27,13 +28,15 @@ public class VoiceInteractionManager : MonoBehaviour
     [Header("Language")]
     public CurrentLanguage currentLanguage;
     
-    [Header("Groq Setup")]
+    [Header("LLM Setup")]
     private GroqApi groq;
     private List<ChatMessage> messages = new List<ChatMessage>();
-    [SerializeField] private string modelName = "llama-3.3-70b-versatile";
-    [SerializeField] private string classifierModelName = "llama-3.1-8b-instant"; //Model used to quickly classify if the given beat is a Success or Failure
+    [SerializeField] private ModelDefinition dialogueModel;
+    [SerializeField] private ModelDefinition classifierModel; //Model used to quickly classify if the given beat is a Success or Failure
+    private ILLMService dialogueLLM;
+    private ILLMService classifierLLM;
     [SerializeField] private string STTModelName = "whisper-large-v3";
-    [SerializeField] private const int MAXHISTORYMESSAGES = 12;
+    
 
     [Header("SCENARIO")] [TextArea(5, 20)] 
     [SerializeField] private string scenarioDescription = "";
@@ -121,7 +124,8 @@ public class VoiceInteractionManager : MonoBehaviour
         
         // Load the credentials dynamically based on the current platform
         LoadGroqCredentials();
-
+        dialogueLLM = new OpenAICompatChatAdapter(dialogueModel);
+        classifierLLM = new OpenAICompatChatAdapter(classifierModel);
 #if UNITY_ANDROID
         // Request microphone permission on Android (Meta Quest) devices
         if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
@@ -383,40 +387,27 @@ public class VoiceInteractionManager : MonoBehaviour
         }
 
         messages.Add(newMessage);
-        if (messages.Count > MAXHISTORYMESSAGES + 1)
+        ChatResponse res = await dialogueLLM.CompleteAsync(new ChatRequest
         {
-            int removeCount = messages.Count - (MAXHISTORYMESSAGES + 1);
-            messages.RemoveRange(1, removeCount);
-        }
-
-        CreateChatCompletionRequest req = new CreateChatCompletionRequest
-        {
-            Model = modelName,
             Messages = messages,
             Temperature = 0.7f,
             MaxTokens = 1024
-        };
-
-        CreateChatCompletionResponse res = await groq.CreateChatCompletion(req);
-
-        if (res.Choices != null && res.Choices.Count > 0)
+        });
+        if (!res.Success)
         {
-            var responseMessage = res.Choices[0].Message;
-            string content = responseMessage.Content.Trim();
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                Debug.LogWarning($"[LLM] Empty reply (finish: {res.Choices[0].FinishReason}).");                                                                                                                  
-                return string.Empty; 
-            }
-            responseMessage.Content = content;
-            if(storyBeatManager != null) storyBeatManager.RegisterNpcTurn();
-            // Append the AI response to the history to maintain context
-            messages.Add(responseMessage);
-
-            return responseMessage.Content;
+            Debug.LogError($"[LLM] {res.Error}");
+            return "Error: No response generated";
         }
 
-        return "Error: No response generated.";
+        string content = res.Text.Trim();
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            Debug.LogError($"[LLM] Empty reply (finish: {res.FinishReason}).");
+            return string.Empty;
+        }
+        if(storyBeatManager != null) storyBeatManager.RegisterNpcTurn();
+        messages.Add(new ChatMessage("assistant", content));
+        return content;
     }
 
     private async Task PlayInworldTTS(string aiResponseText)
@@ -755,25 +746,18 @@ public class VoiceInteractionManager : MonoBehaviour
         string success = string.IsNullOrEmpty(beat.SuccessCondition) ? "(none)" : beat.SuccessCondition;
         string failure = string.IsNullOrEmpty(beat.FailureCondition) ? "(none)" : beat.FailureCondition;
 
-        CreateChatCompletionRequest req = new CreateChatCompletionRequest
+        ChatResponse res = await classifierLLM.CompleteAsync(new ChatRequest
         {
-            Model = classifierModelName,
             Messages = new List<ChatMessage>
             {
-                new ChatMessage { Role = "system", Content = coreRules.OutcomeClassifierPrompt },
-                new ChatMessage
-                {
-                    Role = "user",
-                    Content =
-                        $"Success condition: {success}\nFailure condition: {failure}\n\nNPC's last line: {GetLastNpcLine(stripTags: true)}\nUser's reply: {userText}"
-                }
-
+                new ChatMessage("system", coreRules.OutcomeClassifierPrompt),
+                new ChatMessage("user",
+                    $"Success condition: {success}\nFailure condition: {failure}\n\nNPC's last line: {GetLastNpcLine(stripTags: true)}\nUser's reply: {userText}")
             },
             Temperature = 0f,
             MaxTokens = 1024
-        };
-        CreateChatCompletionResponse res = await groq.CreateChatCompletion(req);
-        string raw = (res.Choices != null && res.Choices.Count > 0) ? res.Choices[0].Message.Content?.Trim() : null;
+        });
+        string raw = res.Success ? res.Text?.Trim() : string.Empty;
         Match digit = string.IsNullOrEmpty(raw) ? Match.Empty : Regex.Match(raw, "[0-2]");
         if (digit.Success && Enum.IsDefined(typeof(StoryProgressResult), int.Parse(digit.Value)))
         {
@@ -781,8 +765,8 @@ public class VoiceInteractionManager : MonoBehaviour
             Debug.Log($"[StoryBeat]'{beat.BeatId}' judged {outcome} (raw '{raw}') | user : {userText}");
             return outcome;
         }
-        
-        Debug.LogWarning($"[StoryBeat] Classifier returned '{raw}' on '{beat.BeatId}', defaulting to Continue, finish: {res.Choices?[0].FinishReason}");
+
+        Debug.LogWarning($"[StoryBeat] Classifier returned '{raw}' on '{beat.BeatId}', defaulting to Continue, finish: {res.FinishReason}, error: {res.Error}");
         return StoryProgressResult.Continue;
     }
 
