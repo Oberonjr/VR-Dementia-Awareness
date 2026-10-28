@@ -7,26 +7,9 @@ namespace VRD_AIProviders
     /// This is what gameplay code references (e.g. VIM's dialogueModel / classifierModel);
     /// swapping the asset swaps the model/provider without code changes.
     /// </summary>
-    [CreateAssetMenu(menuName = "AI/Model Definition", fileName = "Model_")]
-    public class ModelDefinition : ScriptableObject
+    [CreateAssetMenu(menuName = "ScriptableObjects/AI/Models/Chat Model", fileName = "Chat Model")]
+    public class ChatModelDefinition : AIModelDefinition
     {
-        /// <summary>
-        /// The provider this model is served by. Determines the URL, API key and request quirks.
-        /// Must not be null — requests fail immediately without it.
-        /// </summary>
-        [Tooltip("Provider asset that serves this model (determines URL, key and quirks).")]
-        public ProviderDefinition provider;
-
-        /// <summary>
-        /// The model's exact API identifier, sent as "model" in every request.
-        /// Must match one of the IDs shown under "Available models" on the provider asset,
-        /// character for character (e.g. "llama-3.3-70b-versatile", "gpt-5-mini",
-        /// "mistral-small-latest"). Display names from provider websites usually do NOT work.
-        /// A wrong ID typically returns HTTP 404 or 400 "model not found".
-        /// </summary>
-        [Tooltip("Exact API model ID, e.g. llama-3.3-70b-versatile. Copy it from the provider asset's \"Available models\" list.")]
-        public string modelId;
-
         /// <summary>
         /// Optional text appended to the end of the system prompt for this model only.
         /// Use it to compensate for model-specific weaknesses (e.g. "Answer with a single word."

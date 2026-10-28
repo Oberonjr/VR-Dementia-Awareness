@@ -5,9 +5,9 @@ namespace VRD_AIProviders
     /// <summary>
     /// Describes one OpenAI-compatible API endpoint: where it lives, which key to use,
     /// and which request quirks it has. One asset per provider (Groq, OpenAI, Mistral, ...).
-    /// Models on this provider are described by <see cref="ModelDefinition"/> assets pointing here.
+    /// Models on this provider are described by <see cref="AIModelDefinition"/> assets pointing here.
     /// </summary>
-    [CreateAssetMenu(menuName = "AI/Provider Definition", fileName = "Provider_")]
+    [CreateAssetMenu(menuName = "ScriptableObjects/AI/Provider Definition", fileName = "Provider Definition")]
     public class ProviderDefinition : ScriptableObject
     {
         /// <summary>

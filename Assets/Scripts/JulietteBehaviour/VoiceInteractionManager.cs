@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Groq;
+using UnityEngine.Serialization;
 using VRD_AIProviders;
 using ChatMessage = VRD_AIProviders.ChatMessage;
 
@@ -31,13 +32,13 @@ public class VoiceInteractionManager : MonoBehaviour
     [Header("LLM Setup")]
     private GroqApi groq;
     private List<ChatMessage> messages = new List<ChatMessage>();
-    [SerializeField] private ModelDefinition dialogueModel;
-    [SerializeField] private ModelDefinition classifierModel; //Model used to quickly classify if the given beat is a Success or Failure
+    [FormerlySerializedAs("dialogueModel")] [SerializeField] private ChatModelDefinition dialogueChatModel;
+    [FormerlySerializedAs("classifierModel")] [SerializeField] private ChatModelDefinition classifierChatModel; //Model used to quickly classify if the given beat is a Success or Failure
     private ILLMService dialogueLLM;
     private ILLMService classifierLLM;
-    [SerializeField] private string STTModelName = "whisper-large-v3";
+    [SerializeField] private STTModelDefinition STTModelName;
+    private ISTTService stt;
     
-
     [Header("SCENARIO")] [TextArea(5, 20)] 
     [SerializeField] private string scenarioDescription = "";
     
@@ -124,8 +125,9 @@ public class VoiceInteractionManager : MonoBehaviour
         
         // Load the credentials dynamically based on the current platform
         LoadGroqCredentials();
-        dialogueLLM = new OpenAICompatChatAdapter(dialogueModel);
-        classifierLLM = new OpenAICompatChatAdapter(classifierModel);
+        dialogueLLM = new OpenAICompatChatAdapter(dialogueChatModel);
+        classifierLLM = new OpenAICompatChatAdapter(classifierChatModel);
+        stt = new OpenAICompatTranscriptionAdapter(STTModelName);
 #if UNITY_ANDROID
         // Request microphone permission on Android (Meta Quest) devices
         if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
@@ -231,7 +233,13 @@ public class VoiceInteractionManager : MonoBehaviour
         // Process Speech-To-Text (Groq Whisper)
         string userText = await TranscribeAudio(pcmData);
         stopwatch.Stop();
-        Debug.Log($"[MEASURE] STT: {stopwatch.ElapsedMilliseconds} ms | User said: {userText}");
+        if (string.IsNullOrWhiteSpace(userText))
+        {
+            Debug.LogWarning("[STT] Empty transcript - skipping this turn.");
+            OnProcessingFinished?.Invoke();
+            EventBus<OnHideTalk>.Publish(new OnHideTalk());
+            return;
+        }
 
         stopwatch.Restart();
         await ResolveStoryBeat(userText);
@@ -343,22 +351,19 @@ public class VoiceInteractionManager : MonoBehaviour
 
     private async Task<string> TranscribeAudio(byte[] pcmData)
     {
-        // Offload the heavy byte array conversion to a background thread to prevent the main thread from freezing
-        byte[] wavData = await Task.Run(() =>
+        TranscriptionResponse res = await stt.TranscribeAsync(new TranscriptionRequest
         {
-            return SaveWav.SaveFromPCM16(pcmData, nativeRate, nativeChannels);
-        });
-
-        //string lastNpcLine = GetLastNpcLine(stripTags: true);
-        CreateAudioTranscriptionsRequest req = new CreateAudioTranscriptionsRequest
-        {
-            FileData = new FileData() { Data = wavData, Name = "audio.wav" },
-            //Prompt = string.IsNullOrEmpty(lastNpcLine) ? null : lastNpcLine,
-            Model = STTModelName,
+            Pcm16 = pcmData,
+            SampleRate = nativeRate,
+            Channels = nativeChannels,
             Language = sttLanguage
-        };
+        });
+        if (!res.Success)
+        {
+            Debug.LogError($"[STT] {res.Error}");
+            return null;
+        }
 
-        CreateAudioResponse res = await groq.CreateAudioTranscription(req);
         return res.Text;
     }
 

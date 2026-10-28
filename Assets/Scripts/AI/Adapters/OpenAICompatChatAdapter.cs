@@ -3,7 +3,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using UnityEngine;
 using UnityEngine.Networking;
 
 namespace VRD_AIProviders
@@ -13,75 +12,36 @@ namespace VRD_AIProviders
     /// </summary>
     public class OpenAICompatChatAdapter: ILLMService
     {
-        private const int TimeOutSeconds = 30;
-        private readonly ModelDefinition model;
-        public OpenAICompatChatAdapter(ModelDefinition model)
+        private readonly ChatModelDefinition chatModel;
+        public OpenAICompatChatAdapter(ChatModelDefinition chatModel)
         {
-            this.model = model;
+            this.chatModel = chatModel;
         }
 
         public async Task<ChatResponse> CompleteAsync(ChatRequest request)
         {
-            if (model == null || model.provider == null)
-                return ChatResponse.Fail("ModelDefinition or its provider is not assigned.");
-            ProviderDefinition provider = model.provider;
-
-            if (!LocalKeyStore.TryGet(provider.providerId, out LocalKeyStore.ProviderKey key, out string keyError))
-                return ChatResponse.Fail(keyError);
-            
-            if (string.IsNullOrWhiteSpace(provider.baseUrl))
-                return ChatResponse.Fail($"Provider \"{provider.providerId}\" has no Base URL.");
-            string url = provider.baseUrl.Trim().TrimEnd('/') + "/chat/completions";
+            if(!ProviderHttp.TryResolve(chatModel, "chat/completions", out var target, out string error))
+                return ChatResponse.Fail(error);
             byte[] payload = Encoding.UTF8.GetBytes(BuildBody(request).ToString());
 
-            using (var req = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
+            using (var req = new UnityWebRequest(target.Url, UnityWebRequest.kHttpVerbPOST))
             {
                 req.uploadHandler = new UploadHandlerRaw(payload);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.timeout = TimeOutSeconds;
-                try
-                {
-                    req.SetRequestHeader("Content-Type", "application/json");
-                    req.SetRequestHeader("Authorization", "Bearer " + key.apiKey);
-                    if (!string.IsNullOrEmpty(key.organization))
-                        req.SetRequestHeader("OpenAI-Organization", key.organization);
-                }
-                catch (InvalidOperationException)
-                {
-                    return ChatResponse.Fail(
-                        $"The \"{provider.providerId}\" key in keys.json contains invalid characters.");
-                }
-                var op = req.SendWebRequest();
-                while (!op.isDone) await Task.Yield();
-
-                string body = req.downloadHandler?.text;
-                if (req.result != UnityWebRequest.Result.Success)
-                {
-                    string detail = ProviderErrors.Extract(body);
-                    if (req.responseCode == 429)
-                    {
-                        var headers = req.GetResponseHeaders();
-                        if (headers != null)
-                            UnityEngine.Debug.LogWarning("[LLM] 429 headers:\n" + string.Join("\n",
-                                headers.Where(h => h.Key.IndexOf("ratelimit", StringComparison.OrdinalIgnoreCase) >= 0
-                                                   || h.Key.Equals("Retry-After", StringComparison.OrdinalIgnoreCase))
-                                    .Select(h => $"{h.Key}: {h.Value}")));
-                    }
-                    return ChatResponse.Fail(
-                        $"{provider.providerId}/{model.modelId}: HTTP {req.responseCode} {req.error}" +
-                        (detail != null ? $" - {detail}" : string.Empty));
-                }
+                req.SetRequestHeader("Content-Type", "application/json");
+                ProviderHttp.Result res = await ProviderHttp.SendAsync(req, target);
+                if(!res.OK) return ChatResponse.Fail(res.Error);
 
                 try
                 {
-                    JToken choice = JObject.Parse(body)["choices"]?[0];
+                    JToken choice = JObject.Parse(res.Body)["choices"]?[0];
                     string text = (string)choice?["message"]?["content"];
-                    if (text == null) return ChatResponse.Fail($"No message content in response: {Preview(body)}");
+                    if (text == null)
+                        return ChatResponse.Fail($"No message content in response: {ProviderHttp.Preview(res.Body)}");
                     return ChatResponse.OK(text, (string)choice["finish_reason"]);
                 }
                 catch (Exception e)
                 {
-                    return ChatResponse.Fail($"Unreadable response ({e.Message}): {Preview(body)}");
+                    return ChatResponse.Fail($"Unreadable response ({e.Message}): {ProviderHttp.Preview(res.Body)}");
                 }
             }
         }
@@ -97,17 +57,17 @@ namespace VRD_AIProviders
 
             var body = new JObject
             {
-                ["model"] = model.modelId,
+                ["model"] = chatModel.modelId,
                 ["messages"] = messages
             };
-            if (req.Temperature.HasValue && model.supportsTemperature)
+            if (req.Temperature.HasValue && chatModel.supportsTemperature)
             {
                 body["temperature"] = req.Temperature.Value;
             }
 
             if (req.MaxTokens.HasValue)
             {
-                body[model.useMaxCompletionTokens ? "max_completion_tokens" : "max_tokens"] = req.MaxTokens.Value;
+                body[chatModel.useMaxCompletionTokens ? "max_completion_tokens" : "max_tokens"] = req.MaxTokens.Value;
             }
 
             return body;
@@ -115,17 +75,15 @@ namespace VRD_AIProviders
 
         private void AppendPromptAddOn(JArray messages)
         {
-            if (string.IsNullOrWhiteSpace(model.promptAddOn)) return;
+            if (string.IsNullOrWhiteSpace(chatModel.promptAddOn)) return;
             JToken system = messages.FirstOrDefault(m => (string)m["role"] == "system");
             if (system != null)
-                system["content"] = (string)system["content"] + "\n\n" + model.promptAddOn.Trim();
+                system["content"] = (string)system["content"] + "\n\n" + chatModel.promptAddOn.Trim();
             else
             {
-                messages.Insert(0, new JObject{["role"] = "system", ["content"] = model.promptAddOn.Trim()});
+                messages.Insert(0, new JObject{["role"] = "system", ["content"] = chatModel.promptAddOn.Trim()});
             }
         }
-        private static string Preview(string body) =>
-            string.IsNullOrEmpty(body) ? "(empty body)" : body.Substring(0, Math.Min(200, body.Length));
     }
 }
 
