@@ -1,5 +1,4 @@
 using FMODUnity;
-using OpenAI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,7 +10,6 @@ using UnityEngine.Localization.Settings;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Groq;
 using UnityEngine.Serialization;
 using VRD_AIProviders;
 using ChatMessage = VRD_AIProviders.ChatMessage;
@@ -30,13 +28,12 @@ public class VoiceInteractionManager : MonoBehaviour
     public CurrentLanguage currentLanguage;
     
     [Header("LLM Setup")]
-    private GroqApi groq;
     private List<ChatMessage> messages = new List<ChatMessage>();
     [FormerlySerializedAs("dialogueModel")] [SerializeField] private ChatModelDefinition dialogueChatModel;
     [FormerlySerializedAs("classifierModel")] [SerializeField] private ChatModelDefinition classifierChatModel; //Model used to quickly classify if the given beat is a Success or Failure
     private ILLMService dialogueLLM;
     private ILLMService classifierLLM;
-    [SerializeField] private STTModelDefinition STTModelName;
+    [FormerlySerializedAs("STTModelName")][SerializeField] private STTModelDefinition sttModel;
     private ISTTService stt;
     
     [Header("SCENARIO")] [TextArea(5, 20)] 
@@ -123,11 +120,9 @@ public class VoiceInteractionManager : MonoBehaviour
         //Concatenate the multiple sections into one prompt for the LLM
         RebuildSystemPrompt();
         
-        // Load the credentials dynamically based on the current platform
-        LoadGroqCredentials();
         dialogueLLM = new OpenAICompatChatAdapter(dialogueChatModel);
         classifierLLM = new OpenAICompatChatAdapter(classifierChatModel);
-        stt = new OpenAICompatTranscriptionAdapter(STTModelName);
+        stt = new OpenAICompatTranscriptionAdapter(sttModel);
 #if UNITY_ANDROID
         // Request microphone permission on Android (Meta Quest) devices
         if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
@@ -647,36 +642,6 @@ public class VoiceInteractionManager : MonoBehaviour
                 }
         }
         return FMOD.RESULT.OK;
-    }
-
-    private void LoadGroqCredentials()
-    {
-        string authFilePath = "";
-
-        #if UNITY_EDITOR || UNITY_STANDALONE
-        // Running on PC: Use the standard plugin path
-        string userProfilePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        authFilePath = Path.Combine(userProfilePath, ".openai", "auth.json");
-        #elif UNITY_ANDROID
-        // Running on Meta Quest: Use the persistent data path
-        authFilePath = Path.Combine(Application.persistentDataPath, "openai_auth.json");
-        #endif
-
-        if (File.Exists(authFilePath))
-        {
-            string jsonContent = File.ReadAllText(authFilePath);
-            GroqCredentials creds = JsonUtility.FromJson<GroqCredentials>(jsonContent);
-
-            // Initialize Groq API by explicitly passing the key, bypassing the plugin's default PC path
-            groq = new GroqApi(creds.api_key, creds.organization);
-            Debug.Log($"Groq credentials loaded successfully from: {authFilePath}");
-        }
-        else
-        {
-            Debug.LogError($"Groq Auth file missing at: {authFilePath}");
-            // Fallback to empty initialization (will likely fail if no environment variables are set)
-            groq = new GroqApi();
-        }
     }
 
     private void OnDestroy()

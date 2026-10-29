@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(menuName = "AI Rules/Core Rules")]
+[CreateAssetMenu(menuName = "Scriptable Objects/AI/Rules/Core Rules")]
 public class CoreRules : ScriptableObject
 {
     /// <summary>

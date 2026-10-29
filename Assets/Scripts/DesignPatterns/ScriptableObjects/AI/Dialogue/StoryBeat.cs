@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(menuName = "Dialogue/Story Beat")]
+[CreateAssetMenu(menuName = "Scriptable Objects/Dialogue/Story Beat")]
 public class StoryBeat: ScriptableObject
 {
     [SerializeField, Tooltip("To keep track of each individual beat")]

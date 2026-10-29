@@ -9,12 +9,6 @@ public class InworldCredentials
     public string base64Key;
 }
 
-[System.Serializable]
-public class GroqCredentials
-{
-    public string api_key;
-    public string organization;
-}
 
 [System.Serializable]
 public class TTSRequest

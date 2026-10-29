@@ -7,7 +7,7 @@ namespace VRD_AIProviders
     /// This is what gameplay code references (e.g. VIM's dialogueModel / classifierModel);
     /// swapping the asset swaps the model/provider without code changes.
     /// </summary>
-    [CreateAssetMenu(menuName = "ScriptableObjects/AI/Models/Chat Model", fileName = "Chat Model")]
+    [CreateAssetMenu(menuName = "Scriptable Objects/AI/Models/Chat Model", fileName = "Chat_")]
     public class ChatModelDefinition : AIModelDefinition
     {
         /// <summary>

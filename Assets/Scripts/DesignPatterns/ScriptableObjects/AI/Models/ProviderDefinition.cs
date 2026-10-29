@@ -7,7 +7,7 @@ namespace VRD_AIProviders
     /// and which request quirks it has. One asset per provider (Groq, OpenAI, Mistral, ...).
     /// Models on this provider are described by <see cref="AIModelDefinition"/> assets pointing here.
     /// </summary>
-    [CreateAssetMenu(menuName = "ScriptableObjects/AI/Provider Definition", fileName = "Provider Definition")]
+    [CreateAssetMenu(menuName = "Scriptable Objects/AI/Provider", fileName = "Provider_")]
     public class ProviderDefinition : ScriptableObject
     {
         /// <summary>
