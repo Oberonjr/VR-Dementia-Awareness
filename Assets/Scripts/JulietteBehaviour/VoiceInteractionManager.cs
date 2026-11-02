@@ -2,59 +2,50 @@ using FMODUnity;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEngine.Serialization;
 using VRD_AIProviders;
-using ChatMessage = VRD_AIProviders.ChatMessage;
 
 /// <summary>
-/// Manages all the AI processes, going from STT, to text response, to TTS.
-/// It was made FMOD compatible, and also localization settings compatible
-/// Especially in terms of TTS, it separates the text into their emotions - sending multiple requests simultaneously.
-/// Currently, it uses Groq for STT and text responses, and Inworld for TTS.
+/// Orchestrates one conversation turn with Juliette: mic recording -> STT -> StoryBeat judgement -> LLM reply -> TTS playback.
+/// The actual work is done by the helpers in JulietteBehaviour/Dialogue; this class owns their inspector settings
+/// and exposes the state other scripts read (recording, speaking, emotion timeline).
+/// It was made FMOD compatible, and also localization settings compatible.
 /// </summary>
 public class VoiceInteractionManager : MonoBehaviour
 {
-    private const int MAX_RECORDING_SECONDS = 60;
+    // Inworld TTS is requested as 44100Hz mono (see InworldTTSClient)
+    private const int INWORLD_SAMPLE_RATE = 44100;
 
     [Header("Language")]
     public CurrentLanguage currentLanguage;
-    
+
     [Header("LLM Setup")]
-    private List<ChatMessage> messages = new List<ChatMessage>();
     [FormerlySerializedAs("dialogueModel")] [SerializeField] private ChatModelDefinition dialogueChatModel;
     [FormerlySerializedAs("classifierModel")] [SerializeField] private ChatModelDefinition classifierChatModel; //Model used to quickly classify if the given beat is a Success or Failure
     private ILLMService dialogueLLM;
     private ILLMService classifierLLM;
     [FormerlySerializedAs("STTModelName")][SerializeField] private STTModelDefinition sttModel;
     private ISTTService stt;
+    [SerializeField] private float chatLLMTemp = 0.7f;
+    [SerializeField] private int chatLLMMaxTokens = 1024;
     
-    [Header("SCENARIO")] [TextArea(5, 20)] 
+    
+    [Header("SCENARIO")] [TextArea(5, 20)]
     [SerializeField] private string scenarioDescription = "";
-    
+
     [Header("CHARACTER")]
     [TextArea(5, 20)]
     [SerializeField] private string characterDescription = "Name: \n Age: \n Description:";
-   
+
     [Header("SYSTEM RULES")]
     [TextArea(5, 20)]
     [SerializeField] private string systemRules = "Output format: \n Response Constraints: \n Guardrails: ";
     [SerializeField] private CoreRules coreRules = null;
-    
-    [Header("LANGUAGE")]
-    [TextArea(5, 20)]
-    private string languageSelection = "Format all responses in: ";
-
-    private string currentDirective;
-    
-    private string systemPrompt = "";
 
     // Stores the current language code for Whisper STT
     private string sttLanguage => currentLanguage switch
@@ -64,51 +55,33 @@ public class VoiceInteractionManager : MonoBehaviour
         _ => "en"
     };
     private CurrentLanguage lastLanguage;
-    
+
     [Header("Setup")]
     [SerializeField] private InworldTTSClient inworldTTS;
     [SerializeField] private LipSyncController lipSyncController;
 
-    [Header("FMOD Mic Recording Setup")]
-    private FMOD.Sound micSound;
-    private int nativeRate;
-    private int nativeChannels;
-    private int recordDeviceId = 0; // Default microphone
-    private bool isRecording = false;
-    private float recordingStartTime = 0f; // Tracks when the recording started
-    
     [Header("FMOD Playback Setup")]
     [SerializeField] private EventReference fmodDialogueEvent;
-    private FMOD.Studio.EventInstance dialogueInstance;
-    private GCHandle stringHandle;
 
-    public List<EmotionTimelineEvent> CurrentEmotionTimeline { get; private set; } = new List<EmotionTimelineEvent>();
+    private readonly MicRecorder mic = new MicRecorder();
+    private readonly ConversationHistory history = new ConversationHistory();
+    private BeatJudge beatJudge;
+    private SpeechPlayer speechPlayer;
+
+    public List<EmotionTimelineEvent> CurrentEmotionTimeline => speechPlayer?.Timeline ?? new List<EmotionTimelineEvent>();
 
     // For showing off progress during processing
     public event Action OnProcessingStarted;
     public event Action OnProcessingFinished;
 
-    public bool IsRecording => isRecording;
+    public bool IsRecording => mic.IsRecording;
 
-    public bool IsSpeaking
-    {
-        get
-        {
-            if (!dialogueInstance.isValid()) { return false; }
-            dialogueInstance.getPlaybackState(out FMOD.Studio.PLAYBACK_STATE state);
-            return state == FMOD.Studio.PLAYBACK_STATE.PLAYING || state == FMOD.Studio.PLAYBACK_STATE.STARTING;
-        }
-    }
+    public bool IsSpeaking => speechPlayer != null && speechPlayer.IsSpeaking;
 
-    public float GetCurrentDialogueTime()
-    {
-        if (!dialogueInstance.isValid()) return 0f;
-        dialogueInstance.getTimelinePosition(out int posMs);
-        return posMs / 1000f; // Convert ms to seconds
-    }
-    
+    public float GetCurrentDialogueTime() => speechPlayer?.CurrentTime ?? 0f;
+
     private StoryBeatManager storyBeatManager;
-    
+
     private IEnumerator Start()
     {
         if (coreRules == null || coreRules.Rules == null || coreRules.Rules == string.Empty || string.IsNullOrEmpty(coreRules.OutcomeClassifierPrompt))
@@ -119,10 +92,12 @@ public class VoiceInteractionManager : MonoBehaviour
         storyBeatManager = StoryBeatManager.Instance;
         //Concatenate the multiple sections into one prompt for the LLM
         RebuildSystemPrompt();
-        
+
         dialogueLLM = new OpenAICompatChatAdapter(dialogueChatModel);
         classifierLLM = new OpenAICompatChatAdapter(classifierChatModel);
         stt = new OpenAICompatTranscriptionAdapter(sttModel);
+        beatJudge = new BeatJudge(classifierLLM, coreRules, storyBeatManager, history);
+        speechPlayer = new SpeechPlayer(fmodDialogueEvent, lipSyncController);
 #if UNITY_ANDROID
         // Request microphone permission on Android (Meta Quest) devices
         if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
@@ -147,73 +122,39 @@ public class VoiceInteractionManager : MonoBehaviour
         }
 
         // Initialize the microphone in the background during startup to prevent frame drops later
-        if (!micSound.hasHandle())
+        if (!mic.IsInitialized)
         {
-            InitFMODMicrophone();
+            mic.Init();
         }
     }
 
     private void Update()
     {
         // Automatically stop and process if the maximum recording time is reached
-        if (isRecording)
+        if (mic.IsRecording)
         {
-            float currentTime = Time.time - recordingStartTime;
-            float currentProgress = Mathf.InverseLerp(MAX_RECORDING_SECONDS, 0, currentTime);
+            float currentTime = mic.Elapsed;
+            float currentProgress = Mathf.InverseLerp(MicRecorder.MAX_RECORDING_SECONDS, 0, currentTime);
             EventBus<OnUpdateTalkTimer>.Publish(new OnUpdateTalkTimer(currentProgress));
 
-            if(currentTime >= MAX_RECORDING_SECONDS)
+            if(currentTime >= MicRecorder.MAX_RECORDING_SECONDS)
             {
-                Debug.Log($"Maximum recording duration of {MAX_RECORDING_SECONDS} seconds reached. Auto-stopping...");
+                Debug.Log($"Maximum recording duration of {MicRecorder.MAX_RECORDING_SECONDS} seconds reached. Auto-stopping...");
                 StopRecordingAndProcess();
             }
         }
     }
 
-    public void DiscardRecording()
-    {
-        if (!isRecording) { return; }
-        isRecording = false;
+    public void DiscardRecording() => mic.DiscardRecording();
 
-        // Stop FMOD without processing the data
-        RuntimeManager.CoreSystem.recordStop(recordDeviceId);
-        Debug.Log("Recording discarded.");
-    }
-
-    public void StartRecording()
-    {
-        // Fallback: Delaying initialization ensures the user had time to accept Android Mic permissions
-        if (!micSound.hasHandle())
-        {
-            InitFMODMicrophone();
-            // Abort if initialization failed
-            if (!micSound.hasHandle()) { return; }
-        }
-
-        isRecording = true;
-        recordingStartTime = Time.time; // Store the exact time the recording started
-
-        // Start recording into our custom micSound object (false = no looping)
-        RuntimeManager.CoreSystem.recordStart(recordDeviceId, micSound, false);
-        Debug.Log("FMOD Recording started...");
-    }
+    public void StartRecording() => mic.StartRecording();
 
     public async void StopRecordingAndProcess()
     {
-        if (!isRecording) { return; }
-        isRecording = false;
+        if (!mic.IsRecording) { return; }
 
+        byte[] pcmData = mic.StopRecording();
         OnProcessingStarted?.Invoke();
-
-        // Retrieve the current recording position before stopping
-        RuntimeManager.CoreSystem.getRecordPosition(recordDeviceId, out uint recordPosition);
-
-        // Stop the FMOD recording process
-        RuntimeManager.CoreSystem.recordStop(recordDeviceId);
-        Debug.Log($"FMOD Recording stopped. Recorded {recordPosition} samples. Processing STT...");
-
-        // Extract the raw PCM bytes
-        byte[] pcmData = GetRecordedPCMData(recordPosition);
 
         if (pcmData == null || pcmData.Length == 0)
         {
@@ -225,9 +166,10 @@ public class VoiceInteractionManager : MonoBehaviour
         System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
 
         stopwatch.Start();
-        // Process Speech-To-Text (Groq Whisper)
+        // Process Speech-To-Text
         string userText = await TranscribeAudio(pcmData);
         stopwatch.Stop();
+        Debug.Log($"[MEASURE] STT: {stopwatch.ElapsedMilliseconds} ms | User: {userText}");
         if (string.IsNullOrWhiteSpace(userText))
         {
             Debug.LogWarning("[STT] Empty transcript - skipping this turn.");
@@ -237,10 +179,10 @@ public class VoiceInteractionManager : MonoBehaviour
         }
 
         stopwatch.Restart();
-        await ResolveStoryBeat(userText);
+        if (await beatJudge.ResolveAsync(userText)) RebuildSystemPrompt();
         stopwatch.Stop();
         Debug.Log($"[MEASURE] Beat resolve: {stopwatch.ElapsedMilliseconds} ms");
-        // Generate AI Text Response (Groq Llama)
+        // Generate AI Text Response
         stopwatch.Restart();
         string aiResponseText = await GetAIResponse(userText);
         stopwatch.Stop();
@@ -271,77 +213,9 @@ public class VoiceInteractionManager : MonoBehaviour
             currentLanguage = CurrentLanguage.Dutch;
             Debug.Log($"Language switched to Dutch (Code: {newLocale.Identifier.Code}).");
         }
+        // Also applies the newly translated system prompt to the active history
         RebuildSystemPrompt();
         lastLanguage = currentLanguage;
-        
-        // Apply the newly translated system prompt to the active history immediately if it exists
-        if (messages.Count > 0 && messages[0].Role == "system")
-        {
-            ChatMessage updatedSystemMessage = messages[0];
-            updatedSystemMessage.Content = systemPrompt;
-            messages[0] = updatedSystemMessage; // Force value back into the list indexer
-            Debug.Log("System prompt updated dynamically in active conversation history.");
-        }
-    }
-
-    private void InitFMODMicrophone()
-    {
-        // Check if FMOD detects any input drivers
-        RuntimeManager.CoreSystem.getRecordNumDrivers(out int numDrivers, out _);
-        if (numDrivers == 0)
-        {
-            Debug.LogError("No recording devices found by FMOD! Check your Microphone permissions.");
-            return;
-        }
-
-        // Get hardware details from the default microphone
-        RuntimeManager.CoreSystem.getRecordDriverInfo(recordDeviceId, out string name, 128, out _, out int originalRate, out _, out int originalChannels, out _);
-
-        // Whisper uses 16kHz Mono anyways, so keep it capped to save resources
-        nativeRate = 16000;
-        nativeChannels = 1;
-
-        Debug.Log($"Initialized FMOD Mic: {name} | Original: {originalRate}Hz | Forced for STT: {nativeRate}Hz Mono");
-
-        // Prepare an FMOD struct to allocate memory for the recording
-        FMOD.CREATESOUNDEXINFO exinfo = new FMOD.CREATESOUNDEXINFO();
-        exinfo.cbsize = Marshal.SizeOf(typeof(FMOD.CREATESOUNDEXINFO));
-        exinfo.numchannels = nativeChannels;
-        exinfo.format = FMOD.SOUND_FORMAT.PCM16;
-        exinfo.defaultfrequency = nativeRate;
-        exinfo.length = (uint)(nativeRate * sizeof(short) * nativeChannels * MAX_RECORDING_SECONDS);
-
-        // Create the custom sound object in memory
-        RuntimeManager.CoreSystem.createSound("", FMOD.MODE.DEFAULT | FMOD.MODE.OPENUSER, ref exinfo, out micSound);
-    }
-
-    private byte[] GetRecordedPCMData(uint recordPosition)
-    {
-        // Abort if no data was recorded
-        if (recordPosition == 0) { return null; }
-
-        // Calculate the file size in bytes (Samples * 2 bytes per short * number of channels)
-        uint lengthInBytes = recordPosition * sizeof(short) * (uint)nativeChannels;
-
-        // Lock the FMOD memory area to safely read the data
-        FMOD.RESULT result = micSound.@lock(0, lengthInBytes, out IntPtr ptr1, out IntPtr ptr2, out uint len1, out uint len2);
-
-        if (result != FMOD.RESULT.OK)
-        {
-            Debug.LogError($"Failed to lock FMOD sound buffer: {result}");
-            return null;
-        }
-
-        byte[] audioBytes = new byte[len1 + len2];
-
-        // Copy the data from the unmanaged FMOD memory to our managed C# byte array
-        if (len1 > 0) Marshal.Copy(ptr1, audioBytes, 0, (int)len1);
-        if (len2 > 0) Marshal.Copy(ptr2, audioBytes, (int)len1, (int)len2);
-
-        // Unlock the memory area
-        micSound.unlock(ptr1, ptr2, len1, len2);
-
-        return audioBytes;
     }
 
     private async Task<string> TranscribeAudio(byte[] pcmData)
@@ -349,8 +223,8 @@ public class VoiceInteractionManager : MonoBehaviour
         TranscriptionResponse res = await stt.TranscribeAsync(new TranscriptionRequest
         {
             Pcm16 = pcmData,
-            SampleRate = nativeRate,
-            Channels = nativeChannels,
+            SampleRate = mic.SampleRate,
+            Channels = mic.Channels,
             Language = sttLanguage
         });
         if (!res.Success)
@@ -364,34 +238,19 @@ public class VoiceInteractionManager : MonoBehaviour
 
     private async Task<string> GetAIResponse(string prompt)
     {
-        ChatMessage newMessage = new ChatMessage()
+        var outgoing = new List<ChatMessage>(history.Messages);
+        string directive = storyBeatManager != null ? storyBeatManager.GetDirective() : string.Empty;
+        if (!string.IsNullOrWhiteSpace(directive))
         {
-            Role = "user",
-            Content = prompt
-        };
-
-        // Inject the system prompt if the conversation history is empty
-        if (messages.Count == 0)
-        {
-            messages.Add(new ChatMessage() { Role = "system", Content = systemPrompt });
+            outgoing.Add(new ChatMessage("system", "Directive for Juliette's next reply. It has NOT been carried out yet. Do it now, even if the conversation already touched on it:\n" + directive));
         }
-        else
-        {
-            // Update the system prompt in the history dynamically if language changed mid-conversation
-            if (messages[0].Role == "system")
-            {
-                ChatMessage updatedSystemMessage = messages[0];
-                updatedSystemMessage.Content = systemPrompt;
-                messages[0] = updatedSystemMessage; // Force value back into the list indexer
-            }
-        }
-
-        messages.Add(newMessage);
+        
+        history.AddUser(prompt);
         ChatResponse res = await dialogueLLM.CompleteAsync(new ChatRequest
         {
-            Messages = messages,
-            Temperature = 0.7f,
-            MaxTokens = 1024
+            Messages = outgoing,
+            Temperature = chatLLMTemp,
+            MaxTokens = chatLLMMaxTokens
         });
         if (!res.Success)
         {
@@ -406,242 +265,24 @@ public class VoiceInteractionManager : MonoBehaviour
             return string.Empty;
         }
         if(storyBeatManager != null) storyBeatManager.RegisterNpcTurn();
-        messages.Add(new ChatMessage("assistant", content));
+        history.AddAssistant(content);
         return content;
     }
 
     private async Task PlayInworldTTS(string aiResponseText)
     {
         Debug.Log("Parsing emotions and sending parallel TTS requests...");
+        var chunks = EmotionChunker.Parse(aiResponseText);
 
-        // Define a strict list of allowed tags to filter out any hallucinated AI brackets
-        HashSet<string> validTags = new HashSet<string>
-        {
-            "neutral", "happy", "sad", "angry", "fearful", "surprised", "disgusted",
-            "nostalgic", "laugh", "sigh", "cough", "breathe"
-        };
-
-        // Filter out any custom or non-supported tags generated by the AI
-        aiResponseText = Regex.Replace(aiResponseText, @"\[(.*?)\]", match =>
-        {
-            string tag = match.Groups[1].Value.ToLower().Trim();
-            return validTags.Contains(tag) ? match.Value : string.Empty;
-        });
-
-        // Ensure the string starts with a tag so our Regex catches the first sentence
-        if (!aiResponseText.TrimStart().StartsWith("["))
-        {
-            aiResponseText = "[neutral] " + aiResponseText;
-        }
-
-        List<string> chunkedRequests = new List<string>();
-        List<EmotionTimelineEvent> tempTimeline = new List<EmotionTimelineEvent>();
-
-        // Regex extracts the word inside the brackets (Group 1) and the text following it (Group 2)
-        // e.g., "[happy] Hello!" -> Group 1: "happy", Group 2: " Hello!"
-        MatchCollection matches = Regex.Matches(aiResponseText, @"\[(.*?)\]([^\[]*)");
-
-        bool currentNostalgic = false;
-        string currentEmotion = "neutral";
-
-        foreach (Match match in matches)
-        {
-            string emotionTag = match.Groups[1].Value.ToLower().Trim();
-            string textSegment = match.Groups[2].Value.Trim();
-
-            // Intercept nostalgic tag
-            if (emotionTag == "nostalgic")
-            {
-                currentNostalgic = true;
-                // If there's no text right after the nostalgic tag, just skip to the next tag (which should be the emotion)
-                if (string.IsNullOrWhiteSpace(textSegment)) continue;
-            }
-            else
-            {
-                currentEmotion = emotionTag;
-            }
-
-            if (!string.IsNullOrEmpty(textSegment))
-            {
-                // Register this chunk in our timeline (startTime will be calculated after download)
-                tempTimeline.Add(new EmotionTimelineEvent
-                {
-                    emotion = currentEmotion,
-                    isNostalgic = currentNostalgic,
-                    startTime = 0f
-                });
-
-                if (currentEmotion == "neutral")
-                {
-                    // Strip the [neutral] tag entirely and send only the text.
-                    // This forces Inworld to use its default voice without reading the tag out loud.
-                    chunkedRequests.Add(textSegment);
-                }
-                else
-                {
-                    // Keep the valid tags for Inworld (e.g., [happy] Hello there!)
-                    chunkedRequests.Add($"[{currentEmotion}] {textSegment}");
-                }
-
-                // Reset nostalgic flag for the next parsed bracket
-                currentNostalgic = false;
-            }
-        }
-
-        // Fire all requests simultaneously
-        Task<byte[]>[] fetchTasks = new Task<byte[]>[chunkedRequests.Count];
-        for (int i = 0; i < chunkedRequests.Count; i++)
-        {
-            fetchTasks[i] = inworldTTS.GenerateSpeechBytes(chunkedRequests[i]);
-        }
-
-        // Wait until all parallel tasks have returned their audio bytes
-        byte[][] audioDataArray = await Task.WhenAll(fetchTasks);
+        // Fire all requests simultaneously and wait until all of them have returned their audio bytes
+        byte[][] audioDataArray = await Task.WhenAll(chunks.Select(c => inworldTTS.GenerateSpeechBytes(c.requestText)));
         if (audioDataArray.All(a => a == null || a.Length == 0))
         {
             Debug.LogWarning($"[TTS] No audio produced for response: '{aiResponseText}'. Skipping playback.");
             return;
         }
-        string tempPath = Path.Combine(Application.temporaryCachePath, "stitched_voice.wav");
 
-        // Stitch audio bytes together
-        List<byte> stitchedPCM = new List<byte>();
-
-        // Offload the heavy array stitching and file writing to a background thread
-        await Task.Run(() =>
-        {
-            // Artificial Pause length
-            float pauseDurationSeconds = 0.2f;
-            byte[] silence = new byte[(int)(44100 * 2 * pauseDurationSeconds)];
-
-            float accumulatedTime = 0f;
-
-            for (int i = 0; i < audioDataArray.Length; i++)
-            {
-                byte[] audio = audioDataArray[i];
-                if (audio != null && audio.Length > 0)
-                {
-                    // Inworld occasionally includes a 44-byte WAV header. 
-                    // We strip it off here to prevent loud 'pops' between chunks.
-                    int startIndex = (audio.Length > 44 && audio[0] == 'R' && audio[1] == 'I' && audio[2] == 'F' && audio[3] == 'F') ? 44 : 0;
-
-                    // Update the timeline with the exact start time of this chunk
-                    if (i < tempTimeline.Count)
-                    {
-                        var ev = tempTimeline[i];
-                        ev.startTime = accumulatedTime;
-                        tempTimeline[i] = ev;
-                    }
-
-                    // Calculate duration of this specific chunk to offset the next one
-                    int dataLength = audio.Length - startIndex;
-                    float chunkDuration = dataLength / (44100f * 2f * 1f);
-
-                    for (int j = startIndex; j < audio.Length; j++)
-                    {
-                        stitchedPCM.Add(audio[j]);
-                    }
-
-                    accumulatedTime += chunkDuration;
-
-                    // Add a brief silence between chunks, but not after the very last one
-                    if (i < audioDataArray.Length - 1)
-                    {
-                        stitchedPCM.AddRange(silence);
-                        accumulatedTime += pauseDurationSeconds;
-                    }
-                }
-            }
-
-            // Wrap a new WAV header around the combined raw PCM bytes
-            // Inworld defaults to 44100Hz, 1 Channel (Mono)
-            byte[] finalWavBytes = SaveWav.SaveFromPCM16(stitchedPCM.ToArray(), 44100, 1);
-
-            // Save to cache
-            File.WriteAllBytes(tempPath, finalWavBytes);
-        });
-
-        // Set the active timeline for the ExpressionController to read
-        CurrentEmotionTimeline = tempTimeline;
-
-        // Play in FMOD (Must be called on the main thread after the background task finishes)
-        PlayFMODProgrammerSound(tempPath);
-
-        // Pass raw bytes and FMOD instance to the Lipsync Controller
-        if (lipSyncController != null)
-        {
-            // Inworld defaults to 44100Hz
-            lipSyncController.PrepareAndPlayVisemes(stitchedPCM.ToArray(), 44100, dialogueInstance);
-        }
-    }
-
-    private void PlayFMODProgrammerSound(string filePath)
-    {
-        // Stop and clean up any currently playing dialogue instance
-        if (dialogueInstance.isValid())
-        {
-            dialogueInstance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
-            dialogueInstance.release();
-        }
-
-        dialogueInstance = RuntimeManager.CreateInstance(fmodDialogueEvent);
-
-        // Pin the file path string in memory to prevent the garbage collector from moving it
-        stringHandle = GCHandle.Alloc(filePath, GCHandleType.Pinned);
-        dialogueInstance.setUserData(GCHandle.ToIntPtr(stringHandle));
-
-        // Assign callbacks to handle the creation and destruction of the programmer sound
-        dialogueInstance.setCallback(ProgrammerSoundCallback,
-            FMOD.Studio.EVENT_CALLBACK_TYPE.CREATE_PROGRAMMER_SOUND |
-            FMOD.Studio.EVENT_CALLBACK_TYPE.DESTROY_PROGRAMMER_SOUND);
-
-        dialogueInstance.start();
-        dialogueInstance.release();
-    }
-
-    [AOT.MonoPInvokeCallback(typeof(FMOD.Studio.EVENT_CALLBACK))]
-    private static FMOD.RESULT ProgrammerSoundCallback(FMOD.Studio.EVENT_CALLBACK_TYPE type, IntPtr instancePtr, IntPtr parameterPtr)
-    {
-        FMOD.Studio.EventInstance instance = new FMOD.Studio.EventInstance(instancePtr);
-
-        // Retrieve the pinned string pointer from the event instance
-        instance.getUserData(out IntPtr stringPtr);
-
-        GCHandle stringHandle = GCHandle.FromIntPtr(stringPtr);
-        string audioFilePath = stringHandle.Target as string;
-
-        switch (type)
-        {
-            case FMOD.Studio.EVENT_CALLBACK_TYPE.CREATE_PROGRAMMER_SOUND:
-                {
-                    var parameter = (FMOD.Studio.PROGRAMMER_SOUND_PROPERTIES)Marshal.PtrToStructure(parameterPtr, typeof(FMOD.Studio.PROGRAMMER_SOUND_PROPERTIES));
-
-                    // Load the audio file directly into an FMOD Sound object
-                    FMOD.RESULT result = RuntimeManager.CoreSystem.createSound(audioFilePath, FMOD.MODE.DEFAULT | FMOD.MODE.CREATESTREAM, out FMOD.Sound dialogueSound);
-
-                    if (result == FMOD.RESULT.OK)
-                    {
-                        // Assign the sound handle to the programmer instrument parameter
-                        parameter.sound = dialogueSound.handle;
-                        parameter.subsoundIndex = -1;
-                        Marshal.StructureToPtr(parameter, parameterPtr, false);
-                    }
-                    break;
-                }
-            case FMOD.Studio.EVENT_CALLBACK_TYPE.DESTROY_PROGRAMMER_SOUND:
-                {
-                    var parameter = (FMOD.Studio.PROGRAMMER_SOUND_PROPERTIES)Marshal.PtrToStructure(parameterPtr, typeof(FMOD.Studio.PROGRAMMER_SOUND_PROPERTIES));
-
-                    // Reconstruct the FMOD Sound object and release it from memory
-                    var sound = new FMOD.Sound(parameter.sound);
-                    sound.release();
-
-                    // Free the pinned string handle
-                    stringHandle.Free();
-                    break;
-                }
-        }
-        return FMOD.RESULT.OK;
+        await speechPlayer.PlayAsync(chunks.Select(c => c.timelineEvent).ToList(), audioDataArray, INWORLD_SAMPLE_RATE);
     }
 
     private void OnDestroy()
@@ -649,43 +290,22 @@ public class VoiceInteractionManager : MonoBehaviour
         LocalizationSettings.SelectedLocaleChanged -= HandleLocalizationChanged;
 
         // Ensure the FMOD recording sound buffer is released when the object is destroyed
-        if (micSound.hasHandle()) { micSound.release(); }
+        mic.Dispose();
     }
 
     private IEnumerator WaitForSpeechToFinish()
     {
         yield return new WaitForSeconds(0.5f);
 
-        while (GameManager.Instance.VoiceInterManager.IsSpeaking) { yield return null; }
+        while (IsSpeaking) { yield return null; }
 
         EventBus<OnJulietteFinishedTalk>.Publish(new OnJulietteFinishedTalk());
     }
 
     private void RebuildSystemPrompt()
     {
-        languageSelection = $"Format all responses in: {currentLanguage}";
-        if(storyBeatManager != null)
-        {
-            currentDirective = storyBeatManager.GetDirective();
-        }
-        else
-        {
-            currentDirective = string.Empty;
-        }
-
-        // Guarded so an unassigned/empty CoreRules asset can't NRE from OnValidate() while editing in the Inspector
-        // (Start() already hard-fails on this at Play time; this is just the Edit-mode safety net).
-        string currentRules = systemRules;
-        if (coreRules != null && !string.IsNullOrEmpty(coreRules.Rules))
-        {
-            currentRules += " \n\n " + coreRules.Rules;
-        }
-        else
-        {
-            Debug.LogWarning("Core rules are missing or empty — system prompt is being built without them.");
-        }
-
-        systemPrompt = $"# Scenario\n{scenarioDescription}\n\n# Character\n{characterDescription}\n\n# Rules\n{currentRules}\n\n# Language \n{languageSelection}\n\n# Current Directive \n{currentDirective}\n";
+        string currentDirective = storyBeatManager != null ? storyBeatManager.GetDirective() : string.Empty;
+        history.SetSystem(PromptBuilder.Build(scenarioDescription, characterDescription, systemRules, coreRules, currentLanguage, currentDirective));
     }
 
     //Ensure that a language change in the inspector during playmode actually notifies the systems
@@ -698,57 +318,4 @@ public class VoiceInteractionManager : MonoBehaviour
             RebuildSystemPrompt();
         }
     }
-
-    private async Task ResolveStoryBeat(string userText)
-    {
-        if (storyBeatManager == null) return;
-        StoryBeat previousBeat = storyBeatManager.CurrentStoryBeat;
-        if (!storyBeatManager.AdvanceOnTimeout() && storyBeatManager.NeedsClassification)
-        {
-            storyBeatManager.ReportOutcome(await ClassifyUserReply(userText));
-        }
-        if (storyBeatManager.CurrentStoryBeat != previousBeat) RebuildSystemPrompt();
-    }
-
-    private async Task<StoryProgressResult> ClassifyUserReply(string userText)
-    {
-        StoryBeat beat = storyBeatManager.CurrentStoryBeat;
-        string success = string.IsNullOrEmpty(beat.SuccessCondition) ? "(none)" : beat.SuccessCondition;
-        string failure = string.IsNullOrEmpty(beat.FailureCondition) ? "(none)" : beat.FailureCondition;
-
-        ChatResponse res = await classifierLLM.CompleteAsync(new ChatRequest
-        {
-            Messages = new List<ChatMessage>
-            {
-                new ChatMessage("system", coreRules.OutcomeClassifierPrompt),
-                new ChatMessage("user",
-                    $"Success condition: {success}\nFailure condition: {failure}\n\nNPC's last line: {GetLastNpcLine(stripTags: true)}\nUser's reply: {userText}")
-            },
-            Temperature = 0f,
-            MaxTokens = 1024
-        });
-        string raw = res.Success ? res.Text?.Trim() : string.Empty;
-        Match digit = string.IsNullOrEmpty(raw) ? Match.Empty : Regex.Match(raw, "[0-2]");
-        if (digit.Success && Enum.IsDefined(typeof(StoryProgressResult), int.Parse(digit.Value)))
-        {
-            StoryProgressResult outcome = (StoryProgressResult)int.Parse(digit.Value);
-            Debug.Log($"[StoryBeat]'{beat.BeatId}' judged {outcome} (raw '{raw}') | user : {userText}");
-            return outcome;
-        }
-
-        Debug.LogWarning($"[StoryBeat] Classifier returned '{raw}' on '{beat.BeatId}', defaulting to Continue, finish: {res.FinishReason}, error: {res.Error}");
-        return StoryProgressResult.Continue;
-    }
-
-    private string GetLastNpcLine(bool stripTags)
-    {
-        for (int i = messages.Count - 1; i >= 0; i--)
-        {
-            if (messages[i].Role != "assistant") continue;
-            return stripTags ? Regex.Replace(messages[i].Content, @"\[[^\]]*\]", "").Trim() : messages[i].Content;
-        }
-
-        return string.Empty;
-    }
-     
 }

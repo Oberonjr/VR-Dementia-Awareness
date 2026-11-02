@@ -23,7 +23,7 @@ namespace VRD_AIProviders
             if(!ProviderHttp.TryResolve(chatModel, "chat/completions", out var target, out string error))
                 return ChatResponse.Fail(error);
             byte[] payload = Encoding.UTF8.GetBytes(BuildBody(request).ToString());
-
+            UnityEngine.Debug.Log($"[LLM] {chatModel.modelId} request:\n{BuildBody(request).ToString()}");
             using (var req = new UnityWebRequest(target.Url, UnityWebRequest.kHttpVerbPOST))
             {
                 req.uploadHandler = new UploadHandlerRaw(payload);
@@ -37,6 +37,9 @@ namespace VRD_AIProviders
                     string text = (string)choice?["message"]?["content"];
                     if (text == null)
                         return ChatResponse.Fail($"No message content in response: {ProviderHttp.Preview(res.Body)}");
+                    string reasoning = (string)choice["message"]?["reasoning"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(reasoning))
+                        UnityEngine.Debug.Log($"[LLM] {chatModel.modelId} reasoning:\n{reasoning}");
                     return ChatResponse.OK(text, (string)choice["finish_reason"]);
                 }
                 catch (Exception e)
