@@ -75,7 +75,7 @@ public class InworldTTSClient : MonoBehaviour
             www.SetRequestHeader("Authorization", $"Basic {base64AuthToken}");
 
             UnityWebRequestAsyncOperation operation = www.SendWebRequest();
-            while (!operation.isDone) { await Task.Yield(); }
+            while (!operation.isDone) { await System.Threading.Tasks.Task.Yield(); }
 
             if (www.result != UnityWebRequest.Result.Success)
             {

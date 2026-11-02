@@ -47,6 +47,7 @@ public class TaskManager : MonoBehaviour
         {
             currentTaskIndex++;
             tasks[currentTaskIndex].StartTask();
+            Debug.Log("Next task started: " + tasks[currentTaskIndex].name);
             tasks[currentTaskIndex].onTaskFinished += TriggerNextTask;
         }
     }
