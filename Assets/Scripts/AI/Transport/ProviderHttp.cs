@@ -76,7 +76,7 @@ namespace VRD_AIProviders
         {
             req.timeout = timeoutSeconds;
             if (req.downloadHandler == null) req.downloadHandler = new DownloadHandlerBuffer();
-            if (!TryApplyAuth(req, target, out string authError)) return Result.Failure(0, null, authError);
+            if (!TryApplyAuth(req, target.Provider, target.Key, out string authError)) return Result.Failure(0, null, authError);
 
             var op = req.SendWebRequest();
             while (!op.isDone) await Task.Yield();
@@ -95,19 +95,39 @@ namespace VRD_AIProviders
             ? "(empty body)"
             : body.Substring(0, Math.Min(200, body.Length));
 
-        private static bool TryApplyAuth(UnityWebRequest req, Target target, out string error)
+        public static bool TryApplyAuth(UnityWebRequest req, ProviderDefinition provider, LocalKeyStore.ProviderKey key, out string error)
         {
             error = null;
             try
             {
-                req.SetRequestHeader("Authorization", "Bearer " + target.Key.apiKey);
-                if (!string.IsNullOrEmpty(target.Key.organization))
-                    req.SetRequestHeader("OpenAI-Organization", target.Key.organization);
+                switch (provider.authScheme)
+                {
+                    case AuthScheme.Basic:
+                        req.SetRequestHeader("Authorization", "Basic " + key.apiKey);
+                        break;
+                    case AuthScheme.HeaderKey:
+                        if (string.IsNullOrWhiteSpace(provider.authHeaderName))
+                        {
+                            error =
+                                $"Provider \"{provider.providerId}\" uses HeaderKey auth but has no Auth Header Name.";
+                            return false;
+                        }
+                        req.SetRequestHeader("Authorization", "Bearer " + key.apiKey);
+                        break;
+                    default:
+                        req.SetRequestHeader("Authorization", "Bearer " + key.apiKey);
+                        if (!string.IsNullOrEmpty(key.organization))
+                            req.SetRequestHeader("OpenAI-Organization", key.organization);
+                        break;
+                }
+                if(provider.extraHeaders != null)
+                    foreach(HeaderPair header in provider.extraHeaders)
+                        if(!string.IsNullOrWhiteSpace(header.name)) req.SetRequestHeader(header.name.Trim(), header.value);
                 return true;
             }
             catch (InvalidOperationException)
             {
-                error = $"The \"{target.Provider.providerId}\" key in keys.json contains invalid characters. ";
+                error = $"The \"{provider.providerId}\" key in keys.json contains invalid characters. ";
                 return false;
             }
         }

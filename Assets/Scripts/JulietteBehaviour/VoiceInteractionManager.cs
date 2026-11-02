@@ -18,9 +18,6 @@ using VRD_AIProviders;
 /// </summary>
 public class VoiceInteractionManager : MonoBehaviour
 {
-    // Inworld TTS is requested as 44100Hz mono (see InworldTTSClient)
-    private const int INWORLD_SAMPLE_RATE = 44100;
-
     [Header("Language")]
     public CurrentLanguage currentLanguage;
 
@@ -47,7 +44,7 @@ public class VoiceInteractionManager : MonoBehaviour
     [SerializeField] private string systemRules = "Output format: \n Response Constraints: \n Guardrails: ";
     [SerializeField] private CoreRules coreRules = null;
 
-    // Stores the current language code for Whisper STT
+    // Stores the current language code for STT and TTS
     private string sttLanguage => currentLanguage switch
     {
         CurrentLanguage.English => "en",
@@ -56,10 +53,10 @@ public class VoiceInteractionManager : MonoBehaviour
     };
     private CurrentLanguage lastLanguage;
 
-    [Header("Setup")]
-    [SerializeField] private InworldTTSClient inworldTTS;
+    [Header("Setup")] [SerializeField] private TTSModelDefinition ttsModel;
     [SerializeField] private LipSyncController lipSyncController;
-
+    private ITTSService tts;
+    
     [Header("FMOD Playback Setup")]
     [SerializeField] private EventReference fmodDialogueEvent;
 
@@ -96,6 +93,7 @@ public class VoiceInteractionManager : MonoBehaviour
         dialogueLLM = new OpenAICompatChatAdapter(dialogueChatModel);
         classifierLLM = new OpenAICompatChatAdapter(classifierChatModel);
         stt = new OpenAICompatTranscriptionAdapter(sttModel);
+        tts = new InWorldTTSAdapter(ttsModel);
         beatJudge = new BeatJudge(classifierLLM, coreRules, storyBeatManager, history);
         speechPlayer = new SpeechPlayer(fmodDialogueEvent, lipSyncController);
 #if UNITY_ANDROID
@@ -189,8 +187,7 @@ public class VoiceInteractionManager : MonoBehaviour
         Debug.Log($"[MEASURE] LLM: {stopwatch.ElapsedMilliseconds} ms | AI Response: {aiResponseText}");
 
         stopwatch.Restart();
-        // Process Text-To-Speech (Inworld)
-        await PlayInworldTTS(aiResponseText);
+        await PlaySpeech(aiResponseText);
         stopwatch.Stop();
         Debug.Log($"[MEASURE] TTS: {stopwatch.ElapsedMilliseconds} ms | TTS Finished.");
 
@@ -238,14 +235,15 @@ public class VoiceInteractionManager : MonoBehaviour
 
     private async Task<string> GetAIResponse(string prompt)
     {
+        
+        
+        history.AddUser(prompt);
         var outgoing = new List<ChatMessage>(history.Messages);
         string directive = storyBeatManager != null ? storyBeatManager.GetDirective() : string.Empty;
         if (!string.IsNullOrWhiteSpace(directive))
         {
             outgoing.Add(new ChatMessage("system", "Directive for Juliette's next reply. It has NOT been carried out yet. Do it now, even if the conversation already touched on it:\n" + directive));
         }
-        
-        history.AddUser(prompt);
         ChatResponse res = await dialogueLLM.CompleteAsync(new ChatRequest
         {
             Messages = outgoing,
@@ -269,20 +267,28 @@ public class VoiceInteractionManager : MonoBehaviour
         return content;
     }
 
-    private async Task PlayInworldTTS(string aiResponseText)
+    private async Task PlaySpeech(string aiResponseText)
     {
         Debug.Log("Parsing emotions and sending parallel TTS requests...");
         var chunks = EmotionChunker.Parse(aiResponseText);
 
         // Fire all requests simultaneously and wait until all of them have returned their audio bytes
-        byte[][] audioDataArray = await Task.WhenAll(chunks.Select(c => inworldTTS.GenerateSpeechBytes(c.requestText)));
-        if (audioDataArray.All(a => a == null || a.Length == 0))
+        TTSResponse[] results = await Task.WhenAll(chunks.Select(c => tts.SynthesizeAsync(new TTSRequest
+        {
+            Text = c.text,
+            Emotion = c.timelineEvent.emotion,
+            Language = sttLanguage
+        })));
+        foreach(TTSResponse failed in results.Where(r => !r.Success)) Debug.LogError($"[TTS] {failed.Error}");
+        TTSResponse first = results.FirstOrDefault(r => r.Success);
+        if (first == null)
         {
             Debug.LogWarning($"[TTS] No audio produced for response: '{aiResponseText}'. Skipping playback.");
             return;
         }
 
-        await speechPlayer.PlayAsync(chunks.Select(c => c.timelineEvent).ToList(), audioDataArray, INWORLD_SAMPLE_RATE);
+        await speechPlayer.PlayAsync(chunks.Select(c => c.timelineEvent).ToList(),
+            results.Select(r => r.Success ? r.Pcm16 : null).ToArray(), first.SampleRate);
     }
 
     private void OnDestroy()

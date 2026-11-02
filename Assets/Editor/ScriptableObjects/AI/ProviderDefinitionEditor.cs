@@ -68,6 +68,11 @@ namespace VRD_AIProviders
             EditorGUILayout.EndScrollView();
         }
 
+        
+        // Failure is only working for models that are compatible with OpenAI
+        // endpoints that accept the "/models" command
+        // Any endpoints that don't, such as InWorld,
+        // will throw an error when the button is pressed
         private void Fetch()
         {
             var def = (ProviderDefinition)target;
@@ -87,20 +92,11 @@ namespace VRD_AIProviders
 
             pendingURL = baseUrl.TrimEnd('/') + "/models";
             var req = UnityWebRequest.Get(pendingURL);
-            try
+            if (!ProviderHttp.TryApplyAuth(req, def, key, out string authError))
             {
-                req.SetRequestHeader("Authorization", "Bearer " + key.apiKey);
-                if (!string.IsNullOrEmpty(key.organization))
-                {
-                    req.SetRequestHeader("OpenAI-Organization", key.organization);
-                }
-                
-            }
-            catch(InvalidOperationException)
-            {
-                    req.Dispose();
-                    Store(def, false, $"The \"{def.providerId}\" key or organization in keys.json contains invalid characters.",null);
-                    return;
+                req.Dispose();
+                Store(def, false,  authError, null);
+                return;
             }
 
             req.timeout = TimeOutSeconds;

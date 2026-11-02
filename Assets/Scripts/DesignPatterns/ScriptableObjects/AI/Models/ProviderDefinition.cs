@@ -1,7 +1,16 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace VRD_AIProviders
 {
+    public enum AuthScheme { Bearer, Basic, HeaderKey }
+    [System.Serializable] public struct HeaderPair
+    {
+        public string name;
+        public string value;
+    }
+    
+    
     /// <summary>
     /// Describes one OpenAI-compatible API endpoint: where it lives, which key to use,
     /// and which request quirks it has. One asset per provider (Groq, OpenAI, Mistral, ...).
@@ -32,6 +41,15 @@ namespace VRD_AIProviders
         [Tooltip("API root incl. version, no endpoint. e.g. https://api.openai.com/v1 — \"/chat/completions\" and \"/models\" are appended automatically.")]
         public string baseUrl;
 
+        [Tooltip("How the key from keys.json is sent. Bearer = OpenAI-compatible, Basic = Inworld (key stored already base64), HeaderKey = custom header below.")]
+        public AuthScheme authScheme = AuthScheme.Bearer;
+        
+        [Tooltip("HeaderKey only: header that carries the key, e.g. xi-api-key (ElevenLabs), X-API-Key (Cartesia).")]
+        public string authHeaderName;
+        
+        [Tooltip("Extra NON-SECRET headers sent on every request (e.g. Cartesia-Version). This asset is committed: never put keys here.")]
+        public List<HeaderPair> extraHeaders = new List<HeaderPair>();
+        
         // Written by the "Fetch available models" button (ProviderDefinitionEditor). Not secret:
         // contains model names only, never the key. Hidden from the default inspector and drawn read-only.
         [SerializeField, HideInInspector] private string cachedModels;
