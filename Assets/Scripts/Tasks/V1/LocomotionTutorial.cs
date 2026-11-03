@@ -35,6 +35,7 @@ public class LocomotionTutorial : SimulationTask
         EventBus<OnUpdateTask>.Publish(new OnUpdateTask());
         vrConfig.controllerDrivenHandPosesType = OVRManager.ControllerDrivenHandPosesType.ConformingToController;
         
+        // If VR is not connected. Finish the task by skipping through the VR tutorial.
         if (!CharacterHandler.isVRActive)
         {
             SetupCurrentLocomotion();
