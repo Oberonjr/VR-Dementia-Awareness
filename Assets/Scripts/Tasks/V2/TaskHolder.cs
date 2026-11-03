@@ -1,8 +1,9 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class TaskHolder : MonoBehaviour
+namespace VRD_TaskSystem
+{
+    public class TaskHolder : MonoBehaviour
 {
     public static event Action onTaskStart;
 
@@ -125,4 +126,6 @@ public class TaskHolder : MonoBehaviour
     {
         _currentTask?.Update();
     }
+}
+
 }
