@@ -1,19 +1,13 @@
-﻿using System;
-using UnityEditor;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.SceneManagement;
+using Udar.SceneManager;
 
 public class InputSceneManager : MonoBehaviour
 {
-    private SceneAsset _sceneAsset;
-
-    private void Start()
-    {
-        
-    }
+    private SceneField _sceneAsset;
 
     private void OnButtonPress()
     {
-        SceneManager.LoadScene(_sceneAsset.name);
+        SceneManager.LoadScene(_sceneAsset.Name);
     }
 }

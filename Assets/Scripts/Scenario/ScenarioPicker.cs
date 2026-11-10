@@ -1,13 +1,12 @@
 using System;
-using UnityEditor;
+using Udar.SceneManager;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 [Serializable]
 public class Scenario
 {
     public string name;
-    public SceneAsset scene;
+    public SceneField scene;
 }
 
 public class ScenarioPicker : MonoBehaviour
@@ -24,6 +23,6 @@ public class ScenarioPicker : MonoBehaviour
 
     private void ChooseScenario(int index)
     {
-        _sceneController.LoadScene(scenarios[index].scene.name);
+        _sceneController.LoadScene(scenarios[index].scene.Name);
     }
 }
