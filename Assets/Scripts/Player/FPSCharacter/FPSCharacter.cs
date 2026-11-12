@@ -14,7 +14,7 @@ public class FPSCharacter : MonoBehaviour, IActiveState
 
     [Header("Movement")]
     public float moveSpeed = 5.0f;
-    private Rigidbody rb;
+    protected Rigidbody rb;
 
     [Header("Camera")]
     public Camera playerCamera;
@@ -36,7 +36,7 @@ public class FPSCharacter : MonoBehaviour, IActiveState
     private float originalLinearDamping;
     private float originalAngularDamping;
 
-    private void Start()
+    protected virtual void Start()
     {
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true;
@@ -76,23 +76,32 @@ public class FPSCharacter : MonoBehaviour, IActiveState
         transform.rotation = Quaternion.Euler(0.0f, yRot, 0.0f);
     }
 
-    private void HandleMovement()
+    protected virtual void HandleMovement()
     {
         if (Keyboard.current == null) { return; }
 
-        float x = 0.0f;
-        float z = 0.0f;
+        Vector3 inputVector = GetInputVector();
 
-        if (Keyboard.current.wKey.isPressed) { z += 1.0f; }
-        if (Keyboard.current.sKey.isPressed) { z -= 1.0f; }
-        if (Keyboard.current.aKey.isPressed) { x -= 1.0f; }
-        if (Keyboard.current.dKey.isPressed) { x += 1.0f; }
-
-        Vector3 moveDir = (transform.forward * z + transform.right * x).normalized;
-        Vector3 targetVelocity = moveDir * moveSpeed;
-
-        targetVelocity.y = rb.linearVelocity.y;
+        Vector3 moveDir = (transform.forward * inputVector.z + transform.right * inputVector.x).normalized;
+        UpdateRBVelocity(moveDir * moveSpeed);
+    }
+    protected virtual Vector3 GetInputVector()
+    {
+        Vector3 inputVector = Vector3.zero;
+        if (Keyboard.current.wKey.isPressed) { inputVector.z += 1.0f; }
+        if (Keyboard.current.sKey.isPressed) { inputVector.z -= 1.0f; }
+        if (Keyboard.current.aKey.isPressed) { inputVector.x -= 1.0f; }
+        if (Keyboard.current.dKey.isPressed) { inputVector.x += 1.0f; }
+        return inputVector;
+    }
+    
+    protected virtual void UpdateRBVelocity(Vector3 targetVelocity, bool updateYAxis = false)
+    {
+        if (!updateYAxis)
+            targetVelocity.y = rb.linearVelocity.y;
+        
         rb.linearVelocity = targetVelocity;
+        Debug.Log(targetVelocity);
     }
 
     private void HandleInteractionInput()
