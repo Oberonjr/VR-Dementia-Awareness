@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: ba8140fb2d0760146830e5477bf682b9
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 223368
+  packageName: Scene Field - Attach Scenes To Inspector - FREE
+  packageVersion: 1.0.1
+  assetPath: Assets/Plugins/Udar/SceneField/Examples/Scripts/SceneFieldExample.cs
+  uploadId: 545386

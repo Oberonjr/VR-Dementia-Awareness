@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: b151237423ff1f94cb2229f27dc65c08
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 223368
+  packageName: Scene Field - Attach Scenes To Inspector - FREE
+  packageVersion: 1.0.1
+  assetPath: Assets/Plugins/Udar/SceneField/Examples/Scripts/Udar.SceneManager.Examples.asmdef
+  uploadId: 545386

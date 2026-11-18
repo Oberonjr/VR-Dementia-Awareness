@@ -80,7 +80,8 @@ namespace VRD_AIProviders
 
             var op = req.SendWebRequest();
             while (!op.isDone) await Task.Yield();
-            
+            LogDataUsage(req, target);
+
             string body = req.downloadHandler.text;
             if(req.result == UnityWebRequest.Result.Success) return Result.Success(req.responseCode, body);
 
@@ -89,6 +90,21 @@ namespace VRD_AIProviders
             return Result.Failure(req.responseCode, body,
                 $"{target.Label}: HTTP {req.responseCode} {req.error}" +
                 (detail != null ? $" - {detail}" : string.Empty));
+        }
+
+        // Session-wide network tally (HTTP bodies only; add ~10% for headers/TLS overhead)
+        public static ulong TotalUploadedBytes { get; private set; }
+        public static ulong TotalDownloadedBytes { get; private set; }
+
+        private static void LogDataUsage(UnityWebRequest req, Target target)
+        {
+            TotalUploadedBytes += req.uploadedBytes;
+            TotalDownloadedBytes += req.downloadedBytes;
+            ulong total = TotalUploadedBytes + TotalDownloadedBytes;
+            Debug.Log($"<color=#00E5FF><b>[DATA-USAGE]</b> {target.Label} | " +
+                      $"up {req.uploadedBytes / 1024f:F1} KB, down {req.downloadedBytes / 1024f:F1} KB | " +
+                      $"SESSION TOTAL {total / 1048576f:F2} MB " +
+                      $"(up {TotalUploadedBytes / 1048576f:F2} MB, down {TotalDownloadedBytes / 1048576f:F2} MB)</color>");
         }
 
         public static string Preview(string body) => string.IsNullOrEmpty(body)
