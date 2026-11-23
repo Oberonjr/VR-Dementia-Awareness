@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 1f7c81e2693ada84dbdd1fe8a20c17f6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 286644
+  packageName: Lux Instant Vegetation
+  packageVersion: 0.94
+  assetPath: Assets/Forst/Lux Instant Vegetation/Demo/Content/URP/Materials/M_TreeIt_A_fully_procedural
+    URP.mat
+  uploadId: 720086

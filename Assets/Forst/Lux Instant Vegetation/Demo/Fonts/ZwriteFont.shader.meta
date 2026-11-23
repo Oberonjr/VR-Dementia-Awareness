@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 5977b12434e61714abfd3f1a93663037
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 286644
+  packageName: Lux Instant Vegetation
+  packageVersion: 0.94
+  assetPath: Assets/Forst/Lux Instant Vegetation/Demo/Fonts/ZwriteFont.shader
+  uploadId: 720086

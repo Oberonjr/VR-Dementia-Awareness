@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 345c167bf3170194aa320030816b1ba9
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 286644
+  packageName: Lux Instant Vegetation
+  packageVersion: 0.94
+  assetPath: Assets/Forst/Lux Instant Vegetation/Demo/Content/URP/Prefabs/PF_TreeIt
+    fully procedural Fake LOD URP.prefab
+  uploadId: 720086
