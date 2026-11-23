@@ -152,19 +152,19 @@ Shader "Custom/URP/InteriorMapping"
             half   _CurtainDepth;
             half4  _CurtainTint;
             half   _CurtainBrightness;
-            half   _HallwayCurtain;
-            half   _HallwayCurtainR;
-            half   _HallwaySplit;
+            float  _HallwayCurtain;
+            float  _HallwayCurtainR;
+            float  _HallwaySplit;
             float  _HallwaySplitPos;
-            half   _LivingCurtain;
-            half   _Bedroom1Curtain;
-            half   _Bedroom2Curtain;
-            half   _HallwayCurtainClosed;
-            half   _LivingCurtainClosed;
-            half   _Bedroom1CurtainClosed;
-            half   _Bedroom2CurtainClosed;
-            half   _DoorSide;
-            half   _DoorStyle;
+            float  _LivingCurtain;
+            float  _Bedroom1Curtain;
+            float  _Bedroom2Curtain;
+            float  _HallwayCurtainClosed;
+            float  _LivingCurtainClosed;
+            float  _Bedroom1CurtainClosed;
+            float  _Bedroom2CurtainClosed;
+            float  _DoorSide;
+            float  _DoorStyle;
         CBUFFER_END
         ENDHLSL
 
@@ -318,11 +318,11 @@ Shader "Custom/URP/InteriorMapping"
                 // Done here, before step 3 changes rayTS in 2D mode.
                 float2 curtainUV  = roomUV + rayTS.xy * (_CurtainDepth / -rayTS.z);
                 // Outside the window opening there is no curtain (seen at steep angles).
-                half   curtainMask = (half)(all(curtainUV >= 0.0) && all(curtainUV <= 1.0));
+                float  curtainMask = (float)(all(curtainUV >= 0.0) && all(curtainUV <= 1.0));
 
                 // Which style this room asked for: 0 Random, 1 None, 2+ = atlas cell 0, 1, 2...
-                half   style   = 0;     // 0 Random, 1 None, 2 Venetian, 3 Roller, 4 Curtains
-                half   closed  = 0;     // 0 = open atlas, 1 = closed atlas
+                float  style   = 0;     // 0 Random, 1 None, 2 Venetian, 3 Roller, 4 Curtains
+                float  closed  = 0;     // 0 = open atlas, 1 = closed atlas
                 float  halfId  = 0;     // hallway split: 0 = left half, 1 = right half
                 float  stretch = 1.0;   // how much narrower the texture is drawn (for gradients)
                 float  useDoor = 0;     // 1 = this pixel is the door pane with its own texture
@@ -365,12 +365,12 @@ Shader "Custom/URP/InteriorMapping"
                     if (style < 0.5)    // Random type (respects "Windows With Curtains")
                     {
                         k = floor(rndC.x * cells);
-                        curtainMask *= (half)(rndD.x < _CurtainChance);
+                        curtainMask *= (float)(rndD.x < _CurtainChance);
                     }
                     else                // None, or a fixed type
                     {
                         k = style - 2.0;
-                        curtainMask *= (half)(style > 1.5);
+                        curtainMask *= (float)(style > 1.5);
                     }
                     k = clamp(k, 0.0, cells - 1.0);
                     curtainCell = float2(fmod(k, _CurtainGrid.x), floor(k / _CurtainGrid.x));
@@ -414,8 +414,8 @@ Shader "Custom/URP/InteriorMapping"
                 // and filtering matches the single-cubemap mode exactly.
                 float3 hitDx = ddx(hit);
                 float3 hitDy = ddy(hit);
-                half4  cubeSample;
-                half4  cubeHDR;
+                float4 cubeSample;
+                float4 cubeHDR;
                 [branch] if (roomSlot == 0)
                 {
                     cubeSample = _HallwayCube.SampleGrad(sampler_HallwayCube, hit, hitDx, hitDy);
@@ -437,10 +437,10 @@ Shader "Custom/URP/InteriorMapping"
                     cubeHDR    = _Bedroom2Cube_HDR;
                 }
               #else
-                half4 cubeSample = SAMPLE_TEXTURECUBE(_RoomCube, sampler_RoomCube, hit);
-                half4 cubeHDR    = _RoomCube_HDR;
+                float4 cubeSample = SAMPLE_TEXTURECUBE(_RoomCube, sampler_RoomCube, hit);
+                float4 cubeHDR    = _RoomCube_HDR;
               #endif
-                half4 hdrDecode  = cubeHDR.x > 0 ? cubeHDR : half4(1, 1, 0, 0);
+                float4 hdrDecode = cubeHDR.x > 0 ? cubeHDR : float4(1, 1, 0, 0);
                 interior = DecodeHDREnvironment(cubeSample, hdrDecode);
             #else
                 // --- 3b. 2D: ray-box intersection (B. Golus' pre-projected method) --
