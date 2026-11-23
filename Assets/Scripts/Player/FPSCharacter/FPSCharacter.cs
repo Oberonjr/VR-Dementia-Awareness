@@ -99,9 +99,8 @@ public class FPSCharacter : MonoBehaviour, IActiveState
     {
         if (!updateYAxis)
             targetVelocity.y = rb.linearVelocity.y;
-        
+
         rb.linearVelocity = targetVelocity;
-        Debug.Log(targetVelocity);
     }
 
     private void HandleInteractionInput()
