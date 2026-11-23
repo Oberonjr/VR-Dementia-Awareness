@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: ca8d1ba75d32e8b43b19a971207c3726
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 286644
+  packageName: Lux Instant Vegetation
+  packageVersion: 0.94
+  assetPath: Assets/Forst/Lux Instant Vegetation/Demo/Content/URP/Materials/M_Fern_Baked
+    URP.mat
+  uploadId: 720086

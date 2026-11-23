@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: da2224c788263a243b342caa8af71faa
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 286644
+  packageName: Lux Instant Vegetation
+  packageVersion: 0.94
+  assetPath: Assets/Forst/Lux Instant Vegetation/Demo/Content/HDRP/Prefabs/PF_TreeIt
+    using baked data HDRP.prefab
+  uploadId: 720086
