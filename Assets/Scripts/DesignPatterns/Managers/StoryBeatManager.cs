@@ -1,10 +1,19 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Events;
 
 public class StoryBeatManager : MonoBehaviour
 {
     [SerializeField] private List<StoryBeat> storyBeats = new List<StoryBeat>();
+    
+    [Header("Scene Hooks - optional")]
+    [SerializeField] private List<BeatHook> beatHooks = new List<BeatHook>();
+    [SerializeField] private UnityEvent onStoryEnded;
+
+    public event Action<StoryBeat, StoryBeat, BeatTransitionReason> OnBeatChanged;
+    public event Action OnStoryEnded;
+    
     private StoryBeat _currentStoryBeat;
     public StoryBeat CurrentStoryBeat => _currentStoryBeat;
     private int _messagesOnCurrentBeat = 0;
@@ -24,7 +33,7 @@ public class StoryBeatManager : MonoBehaviour
         {  
             Debug.Log("An instance of StoryBeatManager already exists. Destroying extra copy on object: " + gameObject.name);
             Destroy(this);
-            return; //Ensure the below code doesn't trigger on a dupe manager
+            return; 
         }
         if (storyBeats.Count > 0)
         {
@@ -37,6 +46,11 @@ public class StoryBeatManager : MonoBehaviour
         }
     }
 
+    private void Start()
+    {
+        if (_instance != this || _currentStoryBeat == null) return;
+        RaiseTransition(null, _currentStoryBeat, BeatTransitionReason.Start);
+    }
 
     public string GetDirective()
     {
@@ -50,17 +64,23 @@ public class StoryBeatManager : MonoBehaviour
         return string.Join("\n", parts);
     }
 
-    public void ReportOutcome(StoryProgressResult result)
+    public void ReportOutcome(StoryProgressResult result, StoryBeat expected = null)
     {
+        if (_currentStoryBeat == null) return;
+        if (expected != null && expected != _currentStoryBeat)
+        {
+            Debug.Log($"[StoryBeat] Ignoring stale {result} for '{expected.BeatId}', current beat is '{_currentStoryBeat.BeatId}'.'");
+        }
+        
         switch (result)
         {
             case StoryProgressResult.Success:
-                SetCurrentStoryBeat(ResolveSuccessTransition(), "Success");
+                SetCurrentStoryBeat(ResolveSuccessTransition(), BeatTransitionReason.Success);
                 break;
             case StoryProgressResult.Failure:
                 if (_currentStoryBeat.FailureBeat != null)
                 {
-                    SetCurrentStoryBeat(_currentStoryBeat.FailureBeat, "Failure");
+                    SetCurrentStoryBeat(_currentStoryBeat.FailureBeat, BeatTransitionReason.Failure);
                 }
                 else
                 {
@@ -76,6 +96,25 @@ public class StoryBeatManager : MonoBehaviour
         }
     }
 
+    public void ReportSuccess() => ReportOutcome(StoryProgressResult.Success);
+    public void ReportFailure() => ReportOutcome(StoryProgressResult.Failure);
+
+    public void GoToBeat(StoryBeat beat)
+    {
+        if (beat == null)
+        {
+            Debug.LogWarning("[StoryBeat] GoToBeat called without a beat. Use EndStory() to end the story.");
+            return;
+        }
+        SetCurrentStoryBeat(beat, BeatTransitionReason.Jump);
+    }
+
+    public void EndStory()
+    {
+        if (_currentStoryBeat == null) return;
+        SetCurrentStoryBeat(null, BeatTransitionReason.Jump);
+    }
+
     public void RegisterNpcTurn() => _messagesOnCurrentBeat++;
 
     public bool AdvanceOnTimeout()
@@ -84,14 +123,14 @@ public class StoryBeatManager : MonoBehaviour
 
         if (_messagesOnCurrentBeat < _currentStoryBeat.MaxMessages) return false;
         
-        SetCurrentStoryBeat(ResolveSuccessTransition(), "MaxMessages reached");
+        SetCurrentStoryBeat(ResolveSuccessTransition(), BeatTransitionReason.Timeout);
         return true;
     }
 
     public bool NeedsClassification => _currentStoryBeat != null && _currentStoryBeat.MaxMessages == 0 &&
                                        _messagesOnCurrentBeat > 0 &&
-                                       (!string.IsNullOrEmpty(_currentStoryBeat.SuccessCondition) ||
-                                        !string.IsNullOrEmpty(_currentStoryBeat.FailureCondition));
+                                       (!string.IsNullOrWhiteSpace(_currentStoryBeat.SuccessCondition) ||
+                                        !string.IsNullOrWhiteSpace(_currentStoryBeat.FailureCondition));
 
 
     // Shared by ReportOutcome(Success) and the MaxMessages timeout in NotifyTurnCompleted:
@@ -118,10 +157,51 @@ public class StoryBeatManager : MonoBehaviour
         return null;
     }
 
-    private void SetCurrentStoryBeat(StoryBeat next, string reason)
+    private void SetCurrentStoryBeat(StoryBeat next, BeatTransitionReason reason)
     {
+        StoryBeat previous = _currentStoryBeat;
         Debug.Log($"[StoryBeat] {(_currentStoryBeat ? _currentStoryBeat.BeatId : "<none>")} -> {(next ? next.BeatId : "<end>")} ({reason})");
         _messagesOnCurrentBeat = 0;
         _currentStoryBeat = next;
+        RaiseTransition(previous, next, reason);
+    }
+
+    private void RaiseTransition(StoryBeat previous, StoryBeat next, BeatTransitionReason reason)
+    {
+        OnBeatChanged?.Invoke(previous, next, reason);
+        if (_currentStoryBeat != next) return;
+
+        if (previous != null)
+        {
+            bool succeeded = reason == BeatTransitionReason.Success || reason == BeatTransitionReason.Timeout;
+            bool failed = reason == BeatTransitionReason.Failure;
+            for (int i = 0; i < beatHooks.Count; i++)
+            {
+                BeatHook hook = beatHooks[i];
+                if(hook.beat != previous) continue;
+                if(succeeded) hook.onSuccess?.Invoke();
+                else if(failed) hook.onFailure?.Invoke();
+                hook.onExit?.Invoke();
+
+                if (_currentStoryBeat != next) return;
+
+            }
+        }
+
+        if (next != null)
+        {
+            for (int i = 0; i < beatHooks.Count; i++)
+            {
+                BeatHook hook = beatHooks[i];
+                if (hook.beat != next) continue;
+                hook.onEnter?.Invoke();
+                if (_currentStoryBeat != next) return;
+            }
+        }
+        else
+        {
+            OnStoryEnded?.Invoke();
+            onStoryEnded?.Invoke();
+        }
     }
 }

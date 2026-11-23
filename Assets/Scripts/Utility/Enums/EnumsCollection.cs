@@ -15,3 +15,4 @@ public enum CurrentLanguage{English, Dutch}
 public enum StoryProgressResult{Success = 0, Failure = 1, Continue = 2}
 // Was replaced by locomotion events, but perhaps might be useful still
 public enum JoystickDirection { Any, Up, Horizontal }
+public enum BeatTransitionReason {Start, Success, Failure, Timeout, Jump}
