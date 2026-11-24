@@ -87,7 +87,8 @@ public class WindMaster : MonoBehaviour
         {
             var mat = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
             if (mat == null || mat.shader == null || known.Contains(mat)) continue;
-            if (!AssetDatabase.GetAssetPath(mat.shader).EndsWith("TerrainGrass.shadergraph")) continue;
+            if (!AssetDatabase.GetAssetPath(mat.shader).EndsWith("TerrainGrass.shadergraph")
+                && mat.shader.name != "Environment/Quest Grass") continue;
             grassMaterials.Add(new GrassMaterial
             {
                 material = mat,

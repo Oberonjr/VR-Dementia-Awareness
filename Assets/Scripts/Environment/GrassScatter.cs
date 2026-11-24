@@ -71,6 +71,20 @@ public class GrassScatter : MonoBehaviour
     [Tooltip("Shadows from grass are expensive on Quest. Leave off unless you really see the difference.")]
     public bool castShadows = false;
 
+    [System.Serializable]
+    public class MaterialSwap
+    {
+        public Material original;
+        public Material replacement;
+    }
+
+    [Header("Performance test (material swap)")]
+    [Tooltip("Tick to draw the grass with the replacement materials below instead of the prefabs' own. For Quest A/B tests - no Rebuild needed.")]
+    public bool useMaterialSwaps = false;
+    [Tooltip("The Fill button pairs each grass material with a material named <original name><suffix>, e.g. Grass_A -> Grass_A_Quest.")]
+    public string swapSuffix = "_Quest";
+    public List<MaterialSwap> materialSwaps = new List<MaterialSwap>();
+
     [Header("Light probes (for the 'Fix Light Probes' button)")]
     [Tooltip("The scene's Light Probe Group. Found automatically if empty.")]
     public LightProbeGroup probeGroup;
@@ -120,8 +134,12 @@ public class GrassScatter : MonoBehaviour
 
             for (int sub = 0; sub < t.mesh.subMeshCount && sub < t.materials.Length; sub++)
             {
-                if (t.materials[sub] == null) continue;
-                var rp = new RenderParams(t.materials[sub])
+                var mat = t.materials[sub];
+                if (mat == null) continue;
+                if (useMaterialSwaps)
+                    foreach (var s in materialSwaps)
+                        if (s.original == mat && s.replacement != null) { mat = s.replacement; break; }
+                var rp = new RenderParams(mat)
                 {
                     camera = cam,
                     worldBounds = c.bounds,        // Unity frustum-culls the chunk with this

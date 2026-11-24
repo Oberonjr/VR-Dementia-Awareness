@@ -13,6 +13,31 @@ public class GrassScatterEditor : Editor
 
     void OnEnable() => MigrateOldSetup((GrassScatter)target);
 
+    // For each material the baked grass uses (e.g. Grass_A), finds a material called "<name><suffix>"
+    // (e.g. Grass_A_Quest) anywhere in the project and adds it as a swap. Then tick "Use Swapped Materials".
+    static void FillSwaps(GrassScatter gs, string suffix)
+    {
+        if (string.IsNullOrEmpty(suffix)) { Debug.LogWarning("GrassScatter: set a Swap Suffix first (e.g. _Quest)."); return; }
+        if (gs.data == null) { Debug.LogWarning("GrassScatter: no baked data yet - press Rebuild first."); return; }
+        Undo.RecordObject(gs, "Fill grass test swaps");
+        gs.materialSwaps.Clear();
+        var seen = new HashSet<Material>();
+        foreach (var t in gs.data.types)
+            foreach (var m in t.materials)
+            {
+                if (m == null || !seen.Add(m)) continue;
+                Material rep = null;
+                foreach (var guid in AssetDatabase.FindAssets(m.name + suffix + " t:Material"))
+                {
+                    var cand = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                    if (cand != null && cand.name == m.name + suffix) { rep = cand; break; }
+                }
+                gs.materialSwaps.Add(new GrassScatter.MaterialSwap { original = m, replacement = rep });
+                Debug.Log($"GrassScatter test swap: {m.name} -> {(rep ? rep.name : "NOT FOUND")}");
+            }
+        EditorUtility.SetDirty(gs);
+    }
+
     // Converts the old "one preset for everything" setup into one zone per ticked material.
     static void MigrateOldSetup(GrassScatter gs)
     {
@@ -79,7 +104,14 @@ public class GrassScatterEditor : Editor
         EditorGUILayout.PropertyField(serializedObject.FindProperty("chunkSize"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("castShadows"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("data"));
+        EditorGUILayout.Space(4);
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("useMaterialSwaps"), new GUIContent("Use Swapped Materials"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("swapSuffix"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("materialSwaps"), true);
         serializedObject.ApplyModifiedProperties();
+        var gsT = (GrassScatter)target;
+        if (GUILayout.Button($"Fill Swaps With *{gsT.swapSuffix} Materials"))
+            FillSwaps(gsT, gsT.swapSuffix);
         using (new EditorGUILayout.HorizontalScope())
         {
             GUI.backgroundColor = new Color(0.6f, 1f, 0.6f);
