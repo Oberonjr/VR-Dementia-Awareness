@@ -24,7 +24,7 @@ public class PalmMenuFader : MonoBehaviour
     [SerializeField] private float startFadingAngle = 45.0f;
     [SerializeField] private float fadeSpeed = 12.0f;
 
-    private bool isActive;
+    [SerializeField]private bool isActive;
     private bool angledAfterActivation;
 
     private void Start()

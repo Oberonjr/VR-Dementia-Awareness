@@ -25,7 +25,13 @@ namespace VRD_AIProviders
         private bool isActive = false;
 
         public bool IsActive => isActive;
-        
+
+        [Header("SFX")]
+        [SerializeField] private FMODUnity.EventReference SFXBeginRecord;
+        [SerializeField] private FMODUnity.EventReference SFXEndRecord;
+        [SerializeField] private Transform PlayerTransform;
+
+
         private void Start()
         {
             if (voiceManager == null)
@@ -148,12 +154,14 @@ namespace VRD_AIProviders
             voiceManager.StartRecording();
             state = TalkState.Recording;
             EventBus<OnShowMicrophonePickup>.Publish(new OnShowMicrophonePickup());
+            FMODUnity.RuntimeManager.PlayOneShot(SFXBeginRecord, PlayerTransform.position);
         }
 
         private void EndRecording()
         {
             // State and HUD switch to Processing in HandleProcessingStarted.
             voiceManager.StopRecordingAndProcess();
+            FMODUnity.RuntimeManager.PlayOneShot(SFXEndRecord, PlayerTransform.position);
         }
 
         // Only releases from Processing/Speaking. A late OnJulietteFinishedTalk (TTS-failure path, or a PlayVoice line)
