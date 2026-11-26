@@ -15,28 +15,74 @@ namespace VRD_AIProviders
     public static class LocalKeyStore
     {
         public const string FileName = "keys.json";
-
+        public const string DefaultFolderName = ".vrdementia";
+        public const string PlaceholderKey = "PASTE-YOUR-KEY-HERE";
         public class ProviderKey
         {
             public string apiKey;
             public string organization;
         }
 
-        /// <summary>
-        ///  Absolute path where keys.json is expected on the current platform
-        /// </summary>
-        public static string KeyFilePath
+        public static string DefaultKeyFolder
         {
             get
             {
 #if UNITY_EDITOR || UNITY_STANDALONE
-                string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                return Path.Combine(home, ".vrdementia", FileName);
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), DefaultFolderName);
 #else
-                return Path.Combine(Application.persistentDataPath, FileName);                
+                return Application.persistentDataPath;
 #endif
             }
         }
+#if UNITY_EDITOR
+        private static string folderOverride;
+        private static bool overrideLoaded;
+        private static string OverridePrefKey => "VRD.KeyFolderOverride." + UnityEditor.PlayerSettings.productGUID;
+
+        public static string FolderOverride
+        {
+            get
+            {
+                if (!overrideLoaded)
+                {
+                    folderOverride = UnityEditor.EditorPrefs.GetString(OverridePrefKey, "");
+                    overrideLoaded = true;
+                }
+
+                return folderOverride;
+            }
+            set
+            {
+                folderOverride = value?.Trim() ?? "";
+                overrideLoaded = true;
+                if (string.IsNullOrEmpty(folderOverride))
+                {
+                    UnityEditor.EditorPrefs.DeleteKey(OverridePrefKey);
+                }
+                else
+                {
+                    UnityEditor.EditorPrefs.SetString(OverridePrefKey, folderOverride);
+                }
+            }
+        }
+        public static bool IsUsingOverride => !string.IsNullOrEmpty(FolderOverride);
+#else
+        public static bool IsUsingOverride => false;
+#endif
+        public static string KeyFolder
+        {
+            get
+            {
+#if UNITY_EDITOR
+                if (IsUsingOverride) return FolderOverride;
+#endif
+                return DefaultKeyFolder;
+            }
+        }
+        /// <summary>
+        /// Absolute path where keys.json is expected on the current platform
+        /// </summary>
+        public static string KeyFilePath => Path.Combine(KeyFolder, FileName);
         /// <summary>
         /// Looks up the key for <paramref name="providerID"/>. Returns false with a readable
         /// <paramref name="error"/> describing what is missing or wrong
@@ -53,7 +99,7 @@ namespace VRD_AIProviders
 
             if (!File.Exists(path))
             {
-                error = $"No key file found at:\n{path}\nCreate it with an entry for \"{providerID}\".";
+                error = $"No key file found at:\n{path}\nClick \"Create keys file\" on any Provider asset to make one.";
                 return false;
             }
 
@@ -85,6 +131,13 @@ namespace VRD_AIProviders
                 return false;
             }
 
+            if (key.apiKey.Trim() == PlaceholderKey)
+            {
+                error =
+                    $"The \"{providerID}\" entry in keys.json still has the placeholder. Replace {PlaceholderKey} with your real key.";
+                key = null;
+                return false;
+            }
             error = null;
             return true;
         }

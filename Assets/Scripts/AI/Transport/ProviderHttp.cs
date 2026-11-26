@@ -128,7 +128,7 @@ namespace VRD_AIProviders
                                 $"Provider \"{provider.providerId}\" uses HeaderKey auth but has no Auth Header Name.";
                             return false;
                         }
-                        req.SetRequestHeader("Authorization", "Bearer " + key.apiKey);
+                        req.SetRequestHeader(provider.authHeaderName.Trim(), key.apiKey);
                         break;
                     default:
                         req.SetRequestHeader("Authorization", "Bearer " + key.apiKey);

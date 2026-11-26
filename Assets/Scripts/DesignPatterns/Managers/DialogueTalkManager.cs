@@ -19,8 +19,15 @@ namespace VRD_AIProviders
         [SerializeField]
         private InputActionReference holdToTalk;
 
-        [Header("Startup")] [SerializeField] private bool activeOnStart = true;
+        [Header("Startup")] 
+        [SerializeField] private bool activeOnStart = true;
 
+        [Header("Story")]
+        [Tooltip("Turn talking off when the StoryBeats reach the end of the story.")]
+        [SerializeField] private bool disableOnStoryEnd = false;
+        private StoryBeatManager storyBeatManager;
+        private bool disablePending = false;
+        
         private TalkState state = TalkState.Idle;
         private bool isActive = false;
 
@@ -32,8 +39,13 @@ namespace VRD_AIProviders
             {
                 Debug.LogError("[DialogueTalk] No VoiceInteractionManager found! Drag the AI object into the slot.", this);
                 return;
+                
             }
-
+            if (disableOnStoryEnd)
+            {
+                storyBeatManager = StoryBeatManager.Instance;
+                if (storyBeatManager != null) storyBeatManager.OnStoryEnded += HandleStoryEnded;
+            }
             if (activeOnStart)
             {
                 SetActive(true);
@@ -42,6 +54,7 @@ namespace VRD_AIProviders
 
         private void OnDestroy()
         {
+            if (storyBeatManager != null) storyBeatManager.OnStoryEnded -= HandleStoryEnded;
             SetActive(false);
         }
 
@@ -54,6 +67,7 @@ namespace VRD_AIProviders
 
             if (active)
             {
+                disablePending = false;
                 EventBus<OnRequestTalk>.OnEvent += HandleRequestTalk;
                 EventBus<OnJulietteFinishedTalk>.OnEvent += HandleSpeechFinished;
                 voiceManager.OnProcessingStarted += HandleProcessingStarted;
@@ -163,7 +177,24 @@ namespace VRD_AIProviders
             if (state != TalkState.Processing && state != TalkState.Speaking) { return; }
 
             state = TalkState.Idle;
+            if (disablePending)
+            {
+                disablePending = false;
+                SetActive(false);
+                return;
+            }
             EventBus<OnShowAfterDiscard>.Publish(new OnShowAfterDiscard());
+        }
+
+        private void HandleStoryEnded()
+        {
+            if (state == TalkState.Processing || state == TalkState.Speaking)
+            {
+                disablePending = true;
+                return;
+            }
+
+            SetActive(false);
         }
     }
 }

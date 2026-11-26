@@ -87,6 +87,7 @@ public class VoiceInteractionManager : MonoBehaviour
         }
         lastLanguage = currentLanguage;
         storyBeatManager = StoryBeatManager.Instance;
+        if (storyBeatManager != null) storyBeatManager.OnBeatChanged += HandleBeatChanged;
         //Concatenate the multiple sections into one prompt for the LLM
         RebuildSystemPrompt();
 
@@ -177,7 +178,7 @@ public class VoiceInteractionManager : MonoBehaviour
         }
 
         stopwatch.Restart();
-        if (await beatJudge.ResolveAsync(userText)) RebuildSystemPrompt();
+        await beatJudge.ResolveAsync(userText);
         stopwatch.Stop();
         Debug.Log($"[MEASURE] Beat resolve: {stopwatch.ElapsedMilliseconds} ms");
         // Generate AI Text Response
@@ -294,7 +295,7 @@ public class VoiceInteractionManager : MonoBehaviour
     private void OnDestroy()
     {
         LocalizationSettings.SelectedLocaleChanged -= HandleLocalizationChanged;
-
+        if(storyBeatManager != null) storyBeatManager.OnBeatChanged -= HandleBeatChanged;
         // Ensure the FMOD recording sound buffer is released when the object is destroyed
         mic.Dispose();
     }
@@ -308,6 +309,9 @@ public class VoiceInteractionManager : MonoBehaviour
         EventBus<OnJulietteFinishedTalk>.Publish(new OnJulietteFinishedTalk());
     }
 
+    private void HandleBeatChanged(StoryBeat previous, StoryBeat next, BeatTransitionReason reason) =>
+        RebuildSystemPrompt();
+    
     private void RebuildSystemPrompt()
     {
         string currentDirective = storyBeatManager != null ? storyBeatManager.GetDirective() : string.Empty;

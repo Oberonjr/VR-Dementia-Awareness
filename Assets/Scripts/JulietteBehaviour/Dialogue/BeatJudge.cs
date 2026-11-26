@@ -25,22 +25,22 @@ public class BeatJudge
     }
 
     /// <returns>True if the current StoryBeat changed, meaning the system prompt needs rebuilding.</returns>
-    public async Task<bool> ResolveAsync(string userText)
+    public async Task ResolveAsync(string userText)
     {
-        if (storyBeatManager == null) return false;
+        if (storyBeatManager == null) return;
         StoryBeat previousBeat = storyBeatManager.CurrentStoryBeat;
         if (!storyBeatManager.AdvanceOnTimeout() && storyBeatManager.NeedsClassification)
         {
-            storyBeatManager.ReportOutcome(await ClassifyUserReply(userText));
+            StoryProgressResult outcome = await ClassifyUserReply(userText);
+            storyBeatManager.ReportOutcome(outcome, previousBeat);
         }
-        return storyBeatManager.CurrentStoryBeat != previousBeat;
     }
 
     private async Task<StoryProgressResult> ClassifyUserReply(string userText)
     {
         StoryBeat beat = storyBeatManager.CurrentStoryBeat;
-        string success = string.IsNullOrEmpty(beat.SuccessCondition) ? "(none)" : beat.SuccessCondition;
-        string failure = string.IsNullOrEmpty(beat.FailureCondition) ? "(none)" : beat.FailureCondition;
+        string success = string.IsNullOrWhiteSpace(beat.SuccessCondition) ? "(none)" : beat.SuccessCondition;
+        string failure = string.IsNullOrWhiteSpace(beat.FailureCondition) ? "(none)" : beat.FailureCondition;
 
         ChatResponse res = await classifierLLM.CompleteAsync(new ChatRequest
         {

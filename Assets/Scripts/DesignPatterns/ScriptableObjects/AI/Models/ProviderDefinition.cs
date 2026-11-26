@@ -49,6 +49,15 @@ namespace VRD_AIProviders
         
         [Tooltip("Extra NON-SECRET headers sent on every request (e.g. Cartesia-Version). This asset is committed: never put keys here.")]
         public List<HeaderPair> extraHeaders = new List<HeaderPair>();
+
+        [Header("Key setup help")]
+        [Tooltip(
+            "Web page where a key for this provider is created. Opened by the \"Get a key\" button and written into the keys.json template.")]
+        public string keyPageUrl;
+
+        [Tooltip(
+            "Optional one-line note on what exactly to copy from the provider's site. Written into the keys.json template.")]
+        public string keySetupHint;
         
         // Written by the "Fetch available models" button (ProviderDefinitionEditor). Not secret:
         // contains model names only, never the key. Hidden from the default inspector and drawn read-only.

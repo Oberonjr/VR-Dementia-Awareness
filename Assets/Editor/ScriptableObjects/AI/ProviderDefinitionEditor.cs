@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -29,7 +30,7 @@ namespace VRD_AIProviders
         {
             serializedObject.Update();
             DrawDefaultInspector();
-            
+            DrawKeySection((ProviderDefinition)target);
             SerializedProperty models = serializedObject.FindProperty("cachedModels");
             SerializedProperty status = serializedObject.FindProperty("lastFetchedStatus");
             SerializedProperty ok = serializedObject.FindProperty("lastFetchOK");
@@ -186,6 +187,60 @@ namespace VRD_AIProviders
             so.FindProperty("lastFetchedStatus").stringValue = status;
             if(models != null) so.FindProperty("cachedModels").stringValue = models;
             so.ApplyModifiedProperties();
+        }
+
+        private void DrawKeySection(ProviderDefinition def)
+        {
+            EditorGUILayout.Space(8);
+            EditorGUILayout.LabelField("API Key", EditorStyles.boldLabel);
+
+            string path = LocalKeyStore.KeyFilePath;
+            EditorGUILayout.LabelField(LocalKeyStore.IsUsingOverride
+                ? "Key file location (custom folder, this PC only)"
+                : "Key file location (default)", EditorStyles.miniLabel);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.SelectableLabel(path, EditorStyles.textField, GUILayout.Height(EditorGUIUtility.singleLineHeight));
+                if (GUILayout.Button("Copy", GUILayout.Width(50))) EditorGUIUtility.systemCopyBuffer = path;
+            }
+            KeyFileTool.State state = KeyFileTool.GetState(def.providerId, out string msg);
+            EditorGUILayout.HelpBox(msg, state == KeyFileTool.State.OK ? MessageType.Info : MessageType.Warning);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button(File.Exists(path) ? "Open keys file" : "Create keys file"))
+                    KeyFileTool.OpenFile();
+                if(GUILayout.Button("Show in folder")) KeyFileTool.RevealFolder();
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(state != KeyFileTool.State.NoEntry))
+                {
+                    if (GUILayout.Button($"Add \"{def.providerId}\" to keys file") &&
+                        !KeyFileTool.TryAddEntry(def, out string addError))
+                    {
+                        EditorUtility.DisplayDialog("Couldn't update keys.json", addError, "OK");
+                        GUIUtility.ExitGUI();
+                    }
+                }
+                using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(def.keyPageUrl)))
+                {
+                    if (GUILayout.Button("Get a key (website)")) Application.OpenURL(def.keyPageUrl.Trim());
+                }
+                
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Use a different folder..."))
+                {
+                    KeyFileTool.ChooseFolder();
+                    GUIUtility.ExitGUI();
+                }
+                using (new EditorGUI.DisabledScope(!LocalKeyStore.IsUsingOverride))
+                {
+                    if (GUILayout.Button("Reset to default")) LocalKeyStore.FolderOverride = "";
+                }
+            }
         }
     }
 

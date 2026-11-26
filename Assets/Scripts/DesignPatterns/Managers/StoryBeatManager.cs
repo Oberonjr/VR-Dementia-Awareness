@@ -69,7 +69,8 @@ public class StoryBeatManager : MonoBehaviour
         if (_currentStoryBeat == null) return;
         if (expected != null && expected != _currentStoryBeat)
         {
-            Debug.Log($"[StoryBeat] Ignoring stale {result} for '{expected.BeatId}', current beat is '{_currentStoryBeat.BeatId}'.'");
+            Debug.Log($"[StoryBeat] Ignoring stale {result} for '{expected.BeatId}', current beat is '{_currentStoryBeat.BeatId}'.");
+            return;
         }
         
         switch (result)
