@@ -166,7 +166,12 @@ namespace VRD_AIProviders
 #endif
         }
 
-        public static void RevealFolder() => EditorUtility.RevealInFinder(EnsureFile());
+        public static void RevealFolder()
+        {
+            Directory.CreateDirectory(LocalKeyStore.KeyFolder);
+            string path = LocalKeyStore.KeyFilePath;
+            EditorUtility.RevealInFinder(File.Exists(path) ? path : LocalKeyStore.KeyFolder);
+        }
 
         public static bool TryAddEntry(ProviderDefinition p, out string error)
         {
@@ -206,7 +211,6 @@ namespace VRD_AIProviders
 
         public static void ChooseFolder()
         {
-            string oldPath = LocalKeyStore.KeyFilePath;
             string start = Directory.Exists(LocalKeyStore.KeyFolder)
                 ? LocalKeyStore.KeyFolder
                 : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -223,20 +227,58 @@ namespace VRD_AIProviders
                 return;
             }
 
-            LocalKeyStore.FolderOverride =
-                string.Equals(picked.TrimEnd('\\', '/'), LocalKeyStore.DefaultKeyFolder.TrimEnd('\\', '/'),
-                    StringComparison.OrdinalIgnoreCase)
-                    ? ""
-                    : picked;
+            SwitchFolder(string.Equals(picked.TrimEnd('\\', '/'), LocalKeyStore.DefaultKeyFolder.TrimEnd('\\', '/'),
+                StringComparison.OrdinalIgnoreCase)
+                ? ""
+                : picked);
+            
+        }
+        
+        public static void SwitchFolder(string newOverride)
+        {
+            string oldFolder = LocalKeyStore.KeyFolder;
+            string oldPath = LocalKeyStore.KeyFilePath;
+            LocalKeyStore.FolderOverride = newOverride;
             string newPath = LocalKeyStore.KeyFilePath;
-            if (File.Exists(oldPath) && !File.Exists(newPath) &&
-                EditorUtility.DisplayDialog("Copy your keys?",
-                    $"There's no keys.json in the new folder yet.\n\nCopy your current one from:\n{oldPath}?", "Copy",
-                    "Keep empty"))
+
+            if (string.Equals(Path.GetFullPath(oldPath), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase)) return;
+            if (!File.Exists(oldPath) || File.Exists(newPath)) return;
+
+            // 0 = ok (Enter), 1 = cancel (Esc / X), 2 = alt
+            int choice = EditorUtility.DisplayDialogComplex("Bring your keys along?",
+                $"There's no keys.json in the new folder yet.\n\nCurrent file:\n{oldPath}",
+                "Copy (keep files in old location)",
+                "Leave new folder empty",
+                "Move (remove files from old location)");
+            if (choice == 1) return;
+
+            try
             {
+                Directory.CreateDirectory(LocalKeyStore.KeyFolder);
                 File.Copy(oldPath, newPath);
+                if (choice == 2)
+                {
+                    File.Delete(oldPath);
+                    DeleteFolderIfEmpty(oldFolder);
+                }
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog("Couldn't transfer keys.json", e.Message, "OK");
             }
         }
+
+        private static void DeleteFolderIfEmpty(string folder)
+        {
+            //Only able to delete the default folder - any other created folder cannot be removed
+            if (!string.Equals(folder.TrimEnd('\\', '/'), LocalKeyStore.DefaultKeyFolder.TrimEnd('\\', '/'),
+                    StringComparison.OrdinalIgnoreCase)) return;
+            if(Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+                Directory.Delete(folder);
+        }
+        
+        
+        
         [MenuItem("Tools/VR Dementia/API Keys/Open keys file")]
         private static void MenuOpen() => OpenFile();
 
@@ -255,7 +297,7 @@ namespace VRD_AIProviders
         private static void MenuChoose() => ChooseFolder();
 
         [MenuItem("Tools/VR Dementia/API Keys/Reset to default folder")]
-        private static void MenuReset() => LocalKeyStore.FolderOverride = "";
+        private static void MenuReset() => SwitchFolder("");
     }
 }
 

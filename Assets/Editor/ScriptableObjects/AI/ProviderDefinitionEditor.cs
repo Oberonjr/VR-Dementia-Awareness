@@ -210,7 +210,7 @@ namespace VRD_AIProviders
             {
                 if (GUILayout.Button(File.Exists(path) ? "Open keys file" : "Create keys file"))
                     KeyFileTool.OpenFile();
-                if(GUILayout.Button("Show in folder")) KeyFileTool.RevealFolder();
+                if(GUILayout.Button(Directory.Exists(LocalKeyStore.KeyFolder) ? "Show in folder" : "Create folder")) KeyFileTool.RevealFolder();
             }
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -238,9 +238,14 @@ namespace VRD_AIProviders
                 }
                 using (new EditorGUI.DisabledScope(!LocalKeyStore.IsUsingOverride))
                 {
-                    if (GUILayout.Button("Reset to default")) LocalKeyStore.FolderOverride = "";
+                    if (GUILayout.Button("Reset to default"))
+                    {
+                        KeyFileTool.SwitchFolder("");
+                        GUIUtility.ExitGUI();
+                    }
                 }
             }
+            
         }
     }
 
