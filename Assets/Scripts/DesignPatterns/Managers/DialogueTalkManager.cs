@@ -27,7 +27,7 @@ namespace VRD_AIProviders
         [SerializeField] private bool disableOnStoryEnd = false;
         private StoryBeatManager storyBeatManager;
         private bool disablePending = false;
-        
+        private bool blockedByBeat = false;
         private TalkState state = TalkState.Idle;
         private bool isActive = false;
 
@@ -41,20 +41,27 @@ namespace VRD_AIProviders
                 return;
                 
             }
-            if (disableOnStoryEnd)
+            storyBeatManager = StoryBeatManager.Instance;
+            if (storyBeatManager != null)
             {
-                storyBeatManager = StoryBeatManager.Instance;
-                if (storyBeatManager != null) storyBeatManager.OnStoryEnded += HandleStoryEnded;
+                storyBeatManager.OnBeatChanged += HandleBeatChanged;
+                if(disableOnStoryEnd) storyBeatManager.OnStoryEnded += HandleStoryEnded;
             }
             if (activeOnStart)
             {
                 SetActive(true);
+                if(storyBeatManager != null && storyBeatManager.CurrentStoryBeat != null)
+                    ApplyBeatTalkRule(storyBeatManager.CurrentStoryBeat);
             }
         }
 
         private void OnDestroy()
         {
-            if (storyBeatManager != null) storyBeatManager.OnStoryEnded -= HandleStoryEnded;
+            if (storyBeatManager != null)
+            {
+                storyBeatManager.OnBeatChanged -= HandleBeatChanged;
+                storyBeatManager.OnStoryEnded -= HandleStoryEnded;
+            }
             SetActive(false);
         }
 
@@ -186,15 +193,64 @@ namespace VRD_AIProviders
             EventBus<OnShowAfterDiscard>.Publish(new OnShowAfterDiscard());
         }
 
-        private void HandleStoryEnded()
+        private void HandleBeatChanged(StoryBeat previous, StoryBeat next, BeatTransitionReason reason)
+        {
+            if (next == null)
+            {
+                //End of story allows talking, unless disableOnStoryEnd turns it off
+                //(HandleStoryEnded runs right after this).
+                if (!disableOnStoryEnd) Unblock();
+                return;
+            }
+
+            ApplyBeatTalkRule(next);
+        }
+
+        private void ApplyBeatTalkRule(StoryBeat beat)
+        {
+            if (beat.AllowTalking)
+            {
+                Unblock();
+            }
+            else if (isActive)
+            {
+                blockedByBeat = true;
+                RequestDisable();
+            }
+        }
+
+        private void Unblock()
+        {
+            if (!blockedByBeat) return;
+            blockedByBeat = false;
+            
+            //Currently mid-reply; we didn't get turned off, so just cancel the pending disable.
+            if (disablePending)
+            {
+                disablePending = false;
+            }
+            else
+            {
+                SetActive(true);
+            }
+        }
+
+        /// <summary>
+        /// Waits for the NPC's current line to finish before hiding the HUD; turns off at once otherwise.
+        /// </summary>
+        private void RequestDisable()
         {
             if (state == TalkState.Processing || state == TalkState.Speaking)
             {
                 disablePending = true;
                 return;
             }
-
             SetActive(false);
+        }
+        private void HandleStoryEnded()
+        {
+            blockedByBeat = false;
+            RequestDisable();
         }
     }
 }

@@ -13,10 +13,17 @@ public class StoryBeatManager : MonoBehaviour
 
     public event Action<StoryBeat, StoryBeat, BeatTransitionReason> OnBeatChanged;
     public event Action OnStoryEnded;
+    /// <summary>
+    /// The beat, failures so far on it, its threshold. Fires for every Failure that doesn't transition.
+    /// </summary>
+    public event Action<StoryBeat, int, int> OnFailedAttempt;
     
     private StoryBeat _currentStoryBeat;
     public StoryBeat CurrentStoryBeat => _currentStoryBeat;
     private int _messagesOnCurrentBeat = 0;
+    
+    private int _failuresOnCurrentBeat = 0;
+    public int FailuresOnCurrentBeat => _failuresOnCurrentBeat;
     
     private static StoryBeatManager _instance;
     public static StoryBeatManager Instance => _instance;
@@ -79,15 +86,18 @@ public class StoryBeatManager : MonoBehaviour
                 SetCurrentStoryBeat(ResolveSuccessTransition(), BeatTransitionReason.Success);
                 break;
             case StoryProgressResult.Failure:
-                if (_currentStoryBeat.FailureBeat != null)
+                _failuresOnCurrentBeat++;
+                if (_currentStoryBeat.FailureBeat != null &&
+                    _failuresOnCurrentBeat >= _currentStoryBeat.FailureThreshold)
                 {
                     SetCurrentStoryBeat(_currentStoryBeat.FailureBeat, BeatTransitionReason.Failure);
                 }
                 else
                 {
-                    // No failure beat authored: stay on the current beat. Left as-is on purpose,
-                    // so the message counter (used by MaxMessages beats) isn't reset for no reason.
-                    Debug.LogAssertion($"[StoryBeat] Failure on '{_currentStoryBeat.BeatId}' with no failure beat, staying.");
+                    // Below the threshold, or no failure beat: stay and report the attempt.
+                    Debug.Log($"[StoryBeat] Failure {_failuresOnCurrentBeat}/{_currentStoryBeat.FailureThreshold} on '{_currentStoryBeat.BeatId}'" +
+                              $"{(_currentStoryBeat.FailureBeat == null ? " (no failure beat)" : "")}, staying.");
+                    RaiseFailedAttempt(_currentStoryBeat);
                 }
                 break;
             case StoryProgressResult.Continue:
@@ -155,6 +165,7 @@ public class StoryBeatManager : MonoBehaviour
         }
 
         Debug.Log("Reached the end of the current storyline.");
+
         return null;
     }
 
@@ -163,6 +174,7 @@ public class StoryBeatManager : MonoBehaviour
         StoryBeat previous = _currentStoryBeat;
         Debug.Log($"[StoryBeat] {(_currentStoryBeat ? _currentStoryBeat.BeatId : "<none>")} -> {(next ? next.BeatId : "<end>")} ({reason})");
         _messagesOnCurrentBeat = 0;
+        _failuresOnCurrentBeat = 0;
         _currentStoryBeat = next;
         RaiseTransition(previous, next, reason);
     }
@@ -188,7 +200,6 @@ public class StoryBeatManager : MonoBehaviour
 
             }
         }
-
         if (next != null)
         {
             for (int i = 0; i < beatHooks.Count; i++)
@@ -204,5 +215,19 @@ public class StoryBeatManager : MonoBehaviour
             OnStoryEnded?.Invoke();
             onStoryEnded?.Invoke();
         }
+    }
+    
+    private void RaiseFailedAttempt(StoryBeat beat)
+    {
+            OnFailedAttempt?.Invoke(beat, _failuresOnCurrentBeat, beat.FailureThreshold);
+            if(_currentStoryBeat != beat) return;
+
+            for (int i = 0; i < beatHooks.Count; i++)
+            {
+                BeatHook hook = beatHooks[i];
+                if(hook.beat != beat) continue;
+                hook.onFailedAttempt?.Invoke();
+                if(_currentStoryBeat != beat) return;
+            }
     }
 }

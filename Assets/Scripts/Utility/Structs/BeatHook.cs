@@ -9,4 +9,5 @@ public class BeatHook
     public UnityEvent onExit;
     public UnityEvent onSuccess;
     public UnityEvent onFailure;
+    public UnityEvent onFailedAttempt;
 }

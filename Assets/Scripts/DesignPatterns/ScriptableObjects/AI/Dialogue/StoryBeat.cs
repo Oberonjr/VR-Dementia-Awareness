@@ -17,7 +17,14 @@ public class StoryBeat: ScriptableObject
     private StoryBeat failureBeat;
     [SerializeField] 
     private int maxMessages = 0;
+    [SerializeField, Min(1), Tooltip("How many 'Failure' verdicts it takes to move to the Failure Beat. 1 is on the first one (default).\nFailures below this stay on the beat and fire the 'On Failed Attempt' hook.")]
+    private int failureThreshold = 1;
+    [SerializeField, Tooltip("Can the player talk to the NPC during this beat? Turn off for the beats that wait on gameplay (a task, a trigger).\nTalking comes back on the next beat that allows it.")]
+    private bool allowTalking = true;
 
+    public bool AllowTalking => allowTalking;
+
+    public int  FailureThreshold => Mathf.Max(1, failureThreshold);
     public string BeatId => string.IsNullOrEmpty(beatId) ? name : beatId;
 
     private void OnValidate()
